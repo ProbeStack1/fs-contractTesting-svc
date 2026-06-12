@@ -75,6 +75,13 @@
             <version>1.0.87</version>
         </dependency>
 
+        <!-- SendGrid — approval email delivery -->
+        <dependency>
+            <groupId>com.sendgrid</groupId>
+            <artifactId>sendgrid-java</artifactId>
+            <version>4.9.3</version>
+        </dependency>
+
         <!-- Swagger UI for this service -->
         <dependency>
             <groupId>org.springdoc</groupId>
