@@ -10,7 +10,7 @@ env:
   PROJECT_ID: probestack-prod
   ARTIFACT_REPO: probestack-prod-apps
   ARTIFACT_REGISTRY: us-central1-docker.pkg.dev
-  SERVICE_NAME: fs-contractTesting-svc
+  SERVICE_NAME: fs-contracttesting-svc
   GKE_CLUSTER: probestack-zonal-cluster
   GKE_LOCATION: us-central1-a
   GKE_LOCATION_FLAG: --zone
