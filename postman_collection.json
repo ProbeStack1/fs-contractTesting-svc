@@ -1,0 +1,1047 @@
+{
+  "info": {
+    "_postman_id": "fs-contract-testing-svc-collection",
+    "name": "fs-contractTesting-svc",
+    "description": "Complete API collection for the Forge Contract Testing microservice.\nBase URL: http://localhost:8090/contractTesting\nProduction: https://forgestudio.probestack.io/contractTesting",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl",    "value": "http://localhost:8090/contractTesting", "type": "string" },
+    { "key": "contractId", "value": "contract-id-here",   "type": "string" },
+    { "key": "mockId",     "value": "mock-id-here",       "type": "string" },
+    { "key": "mockUrl",    "value": "mock-abc12345",      "type": "string" },
+    { "key": "endpointId", "value": "endpoint-id-here",   "type": "string" },
+    { "key": "pactFileId", "value": "pact-file-id-here",  "type": "string" },
+    { "key": "consumerId", "value": "consumer-id-here",   "type": "string" },
+    { "key": "historyId",  "value": "history-id-here",    "type": "string" }
+  ],
+  "item": [
+
+    {
+      "name": "01 — Contracts",
+      "item": [
+
+        {
+          "name": "Create Contract",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/contract-tests", "host": ["{{baseUrl}}"], "path": ["api","v1","contract-tests"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"User Service API\",\n  \"type\": \"openapi\",\n  \"description\": \"Contract for User Service REST API\",\n  \"providerName\": \"user-service\",\n  \"consumerName\": \"order-service\",\n  \"environment\": \"staging\",\n  \"baseUrl\": \"https://api.staging.example.com\",\n  \"authType\": \"BEARER\",\n  \"authValue\": \"your-bearer-token-here\",\n  \"status\": \"DRAFT\"\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "header": [{ "key": "Content-Type", "value": "application/json" }],
+              "body": "{\n  \"status\": \"success\",\n  \"message\": \"Contract created successfully\",\n  \"data\": {\n    \"id\": \"c1a2b3c4-d5e6-7890-abcd-ef1234567890\",\n    \"name\": \"User Service API\",\n    \"type\": \"openapi\",\n    \"description\": \"Contract for User Service REST API\",\n    \"providerName\": \"user-service\",\n    \"consumerName\": \"order-service\",\n    \"environment\": \"staging\",\n    \"baseUrl\": \"https://api.staging.example.com\",\n    \"authType\": \"BEARER\",\n    \"authValue\": \"your-bearer-token-here\",\n    \"status\": \"DRAFT\",\n    \"orgId\": \"default\",\n    \"endpointCount\": 0,\n    \"schemaCount\": 0,\n    \"tests\": [],\n    \"validatorRules\": [],\n    \"verifiedConsumers\": [],\n    \"createdAt\": \"2026-06-08T10:00:00Z\",\n    \"updatedAt\": \"2026-06-08T10:00:00Z\"\n  }\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "List Contracts (with filters)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/contract-tests?orgId=org-123&type=openapi&status=ACTIVE&providerName=user-service",
+              "host": ["{{baseUrl}}"],
+              "path": ["api","v1","contract-tests"],
+              "query": [
+                { "key": "orgId",        "value": "org-123",      "description": "Use admin@probestack.io to see ALL contracts" },
+                { "key": "type",         "value": "openapi",      "description": "openapi | pact | graphql | grpc | async | security" },
+                { "key": "status",       "value": "ACTIVE",       "description": "DRAFT | ACTIVE | VERIFIED | FAILED" },
+                { "key": "providerName", "value": "user-service", "description": "Filter by provider name" },
+                { "key": "consumerName", "value": "",             "description": "Filter by consumer name", "disabled": true }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"status\": \"success\",\n  \"data\": [\n    {\n      \"id\": \"c1a2b3c4-d5e6-7890-abcd-ef1234567890\",\n      \"name\": \"User Service API\",\n      \"type\": \"openapi\",\n      \"providerName\": \"user-service\",\n      \"consumerName\": \"order-service\",\n      \"environment\": \"staging\",\n      \"status\": \"ACTIVE\",\n      \"endpointCount\": 5,\n      \"schemaCount\": 3,\n      \"createdAt\": \"2026-06-08T10:00:00Z\",\n      \"updatedAt\": \"2026-06-08T10:00:00Z\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "List Contracts (Admin — all orgs)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/contract-tests?orgId=admin@probestack.io",
+              "host": ["{{baseUrl}}"],
+              "path": ["api","v1","contract-tests"],
+              "query": [
+                { "key": "orgId", "value": "admin@probestack.io", "description": "admin@ prefix bypasses org filter" }
+              ]
+            }
+          },
+          "response": []
+        },
+
+        {
+          "name": "Get Contract by ID",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/v1/contract-tests/{{contractId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","contract-tests","{{contractId}}"] }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"status\": \"success\",\n  \"data\": {\n    \"id\": \"c1a2b3c4-d5e6-7890-abcd-ef1234567890\",\n    \"name\": \"User Service API\",\n    \"type\": \"openapi\",\n    \"specFilename\": \"openapi.yaml\",\n    \"specVersion\": \"1.0.0\",\n    \"providerName\": \"user-service\",\n    \"consumerName\": \"order-service\",\n    \"environment\": \"staging\",\n    \"status\": \"ACTIVE\",\n    \"endpointCount\": 5,\n    \"schemaCount\": 3,\n    \"mockServerId\": \"mock-abc12345\",\n    \"createdAt\": \"2026-06-08T10:00:00Z\",\n    \"updatedAt\": \"2026-06-08T10:00:00Z\"\n  }\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Update Contract",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/contract-tests/{{contractId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","contract-tests","{{contractId}}"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"User Service API v2\",\n  \"type\": \"openapi\",\n  \"description\": \"Updated description\",\n  \"providerName\": \"user-service\",\n  \"consumerName\": \"order-service\",\n  \"environment\": \"production\",\n  \"baseUrl\": \"https://api.prod.example.com\",\n  \"authType\": \"BEARER\",\n  \"authValue\": \"new-bearer-token\"\n}"
+            }
+          },
+          "response": []
+        },
+
+        {
+          "name": "Update Contract Status",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/contract-tests/{{contractId}}/status", "host": ["{{baseUrl}}"], "path": ["api","v1","contract-tests","{{contractId}}","status"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"ACTIVE\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Valid values: DRAFT | ACTIVE | VERIFIED | FAILED"
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"status\": \"success\",\n  \"message\": \"Status updated\",\n  \"data\": {\n    \"id\": \"c1a2b3c4-d5e6-7890-abcd-ef1234567890\",\n    \"status\": \"ACTIVE\"\n  }\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Upload Spec (YAML/JSON)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/contract-tests/{{contractId}}/spec", "host": ["{{baseUrl}}"], "path": ["api","v1","contract-tests","{{contractId}}","spec"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"filename\": \"openapi.yaml\",\n  \"specRaw\": \"openapi: 3.0.0\\ninfo:\\n  title: User Service API\\n  version: 1.0.0\\npaths:\\n  /users:\\n    get:\\n      summary: List users\\n      responses:\\n        '200':\\n          description: OK\\n          content:\\n            application/json:\\n              schema:\\n                type: array\\n                items:\\n                  $ref: '#/components/schemas/User'\\n    post:\\n      summary: Create user\\n      requestBody:\\n        required: true\\n        content:\\n          application/json:\\n            schema:\\n              $ref: '#/components/schemas/CreateUserRequest'\\n      responses:\\n        '201':\\n          description: Created\\n          content:\\n            application/json:\\n              schema:\\n                $ref: '#/components/schemas/User'\\n  /users/{id}:\\n    get:\\n      summary: Get user by ID\\n      parameters:\\n        - name: id\\n          in: path\\n          required: true\\n          schema:\\n            type: string\\n      responses:\\n        '200':\\n          description: OK\\n          content:\\n            application/json:\\n              schema:\\n                $ref: '#/components/schemas/User'\\ncomponents:\\n  schemas:\\n    User:\\n      type: object\\n      required: [id, name, email]\\n      properties:\\n        id:\\n          type: string\\n          format: uuid\\n        name:\\n          type: string\\n        email:\\n          type: string\\n          format: email\\n        createdAt:\\n          type: string\\n          format: date-time\\n    CreateUserRequest:\\n      type: object\\n      required: [name, email]\\n      properties:\\n        name:\\n          type: string\\n        email:\\n          type: string\\n          format: email\"\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"status\": \"success\",\n  \"message\": \"Spec uploaded and parsed\",\n  \"data\": {\n    \"id\": \"c1a2b3c4-d5e6-7890-abcd-ef1234567890\",\n    \"specFilename\": \"openapi.yaml\",\n    \"specVersion\": \"1.0.0\",\n    \"endpointCount\": 3,\n    \"schemaCount\": 2\n  }\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Download Spec",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/v1/contract-tests/{{contractId}}/spec", "host": ["{{baseUrl}}"], "path": ["api","v1","contract-tests","{{contractId}}","spec"] },
+            "description": "Returns the raw YAML/JSON spec as a downloadable attachment."
+          },
+          "response": []
+        },
+
+        {
+          "name": "Upload Validator Rules",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/contract-tests/{{contractId}}/validator-rules", "host": ["{{baseUrl}}"], "path": ["api","v1","contract-tests","{{contractId}}","validator-rules"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rules\": [\n    {\n      \"ruleId\": \"NAMING-001\",\n      \"ruleType\": \"naming\",\n      \"description\": \"Field names must be camelCase\",\n      \"severity\": \"error\"\n    },\n    {\n      \"ruleId\": \"RANGE-001\",\n      \"ruleType\": \"range\",\n      \"field\": \"age\",\n      \"description\": \"Age must be between 18 and 120\",\n      \"severity\": \"error\"\n    }\n  ],\n  \"tests\": [\n    {\n      \"id\": \"VAL-01\",\n      \"name\": \"Field naming convention\",\n      \"category\": \"validator\",\n      \"ruleId\": \"NAMING-001\",\n      \"ruleType\": \"naming\",\n      \"severity\": \"error\",\n      \"description\": \"All field names must follow camelCase convention\",\n      \"assertion\": \"All fields use camelCase naming\"\n    }\n  ]\n}"
+            }
+          },
+          "response": []
+        },
+
+        {
+          "name": "Run Contract Tests",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/api/v1/contract-tests/{{contractId}}/run", "host": ["{{baseUrl}}"], "path": ["api","v1","contract-tests","{{contractId}}","run"] }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"status\": \"success\",\n  \"data\": {\n    \"contractId\": \"c1a2b3c4-d5e6-7890-abcd-ef1234567890\",\n    \"contractName\": \"User Service API\",\n    \"historyId\": \"h9a8b7c6-d5e4-3210-abcd-ef0987654321\",\n    \"runAt\": \"2026-06-08T10:05:00Z\",\n    \"durationMs\": 342,\n    \"testsTotal\": 8,\n    \"testsPassed\": 7,\n    \"testsFailed\": 1,\n    \"totalViolations\": 1,\n    \"hasSpec\": true,\n    \"skippedChecks\": [],\n    \"results\": {\n      \"OA-01\": {\n        \"testId\": \"OA-01\",\n        \"testName\": \"Response schema completeness\",\n        \"category\": \"schema\",\n        \"passed\": true,\n        \"violations\": []\n      },\n      \"OA-04\": {\n        \"testId\": \"OA-04\",\n        \"testName\": \"Mutating endpoint request bodies\",\n        \"category\": \"schema\",\n        \"passed\": false,\n        \"violations\": [\n          {\n            \"field\": \"POST /users\",\n            \"expectedType\": \"requestBody defined\",\n            \"actualType\": \"missing\",\n            \"reason\": \"POST endpoint has no requestBody definition\",\n            \"severity\": \"error\"\n          }\n        ]\n      }\n    }\n  }\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Test Run History",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/v1/contract-tests/{{contractId}}/history", "host": ["{{baseUrl}}"], "path": ["api","v1","contract-tests","{{contractId}}","history"] }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"status\": \"success\",\n  \"data\": [\n    {\n      \"id\": \"h9a8b7c6-d5e4-3210-abcd-ef0987654321\",\n      \"contractId\": \"c1a2b3c4-d5e6-7890-abcd-ef1234567890\",\n      \"contractName\": \"User Service API\",\n      \"runAt\": \"2026-06-08T10:05:00Z\",\n      \"specVersion\": \"1.0.0\",\n      \"testsPassed\": 7,\n      \"testsTotal\": 8,\n      \"hasSpec\": true,\n      \"durationMs\": 342\n    }\n  ]\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Single History Run",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/v1/contract-tests/{{contractId}}/history/{{historyId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","contract-tests","{{contractId}}","history","{{historyId}}"] }
+          },
+          "response": []
+        },
+
+        {
+          "name": "Get Consumers for Contract",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/v1/contract-tests/{{contractId}}/consumers", "host": ["{{baseUrl}}"], "path": ["api","v1","contract-tests","{{contractId}}","consumers"] },
+            "description": "Returns all consumers whose pacts target this contract's provider."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"status\": \"success\",\n  \"data\": [\n    {\n      \"id\": \"con-001\",\n      \"consumerName\": \"order-service\",\n      \"pocName\": \"Jane Smith\",\n      \"pocEmail\": \"jane@example.com\",\n      \"apiTps\": \"100\",\n      \"status\": \"ACTIVE\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Delete Contract",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/api/v1/contract-tests/{{contractId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","contract-tests","{{contractId}}"] }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"status\": \"success\",\n  \"message\": \"Contract deleted\"\n}"
+            }
+          ]
+        }
+
+      ]
+    },
+
+    {
+      "name": "02 — Consumers",
+      "item": [
+
+        {
+          "name": "Create Consumer",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/consumers", "host": ["{{baseUrl}}"], "path": ["api","v1","consumers"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"consumerName\": \"order-service\",\n  \"pocName\": \"Jane Smith\",\n  \"pocEmail\": \"jane.smith@example.com\",\n  \"smeName\": \"Bob Tech\",\n  \"smeEmail\": \"bob.tech@example.com\",\n  \"apiTps\": \"100\",\n  \"quota\": \"10000\",\n  \"rateLimiting\": \"true\",\n  \"apiKeyInfo\": \"api-key-abc123\"\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "body": "{\n  \"status\": \"success\",\n  \"message\": \"Consumer created successfully\",\n  \"data\": {\n    \"id\": \"con-001\",\n    \"consumerName\": \"order-service\",\n    \"pocName\": \"Jane Smith\",\n    \"pocEmail\": \"jane.smith@example.com\",\n    \"smeName\": \"Bob Tech\",\n    \"smeEmail\": \"bob.tech@example.com\",\n    \"apiTps\": \"100\",\n    \"quota\": \"10000\",\n    \"rateLimiting\": \"true\",\n    \"apiKeyInfo\": \"api-key-abc123\",\n    \"status\": \"ACTIVE\",\n    \"createdAt\": \"2026-06-08T10:00:00Z\",\n    \"updatedAt\": \"2026-06-08T10:00:00Z\"\n  }\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "List Consumers",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/v1/consumers", "host": ["{{baseUrl}}"], "path": ["api","v1","consumers"] }
+          },
+          "response": []
+        },
+
+        {
+          "name": "Get Consumer by ID",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/v1/consumers/{{consumerId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","consumers","{{consumerId}}"] }
+          },
+          "response": []
+        },
+
+        {
+          "name": "Update Consumer",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/consumers/{{consumerId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","consumers","{{consumerId}}"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"consumerName\": \"order-service\",\n  \"pocName\": \"Jane Smith\",\n  \"pocEmail\": \"jane.smith@example.com\",\n  \"smeName\": \"Bob Tech\",\n  \"smeEmail\": \"bob.tech@example.com\",\n  \"apiTps\": \"200\",\n  \"quota\": \"20000\",\n  \"rateLimiting\": \"true\",\n  \"apiKeyInfo\": \"api-key-xyz789\"\n}"
+            }
+          },
+          "response": []
+        },
+
+        {
+          "name": "Get Contracts for Consumer",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/v1/consumers/{{consumerId}}/contracts", "host": ["{{baseUrl}}"], "path": ["api","v1","consumers","{{consumerId}}","contracts"] },
+            "description": "Returns all contracts where consumerName matches this consumer."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"status\": \"success\",\n  \"data\": [\n    {\n      \"id\": \"c1a2b3c4-d5e6-7890-abcd-ef1234567890\",\n      \"name\": \"User Service API\",\n      \"type\": \"openapi\",\n      \"providerName\": \"user-service\",\n      \"consumerName\": \"order-service\",\n      \"status\": \"ACTIVE\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Delete Consumer",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/api/v1/consumers/{{consumerId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","consumers","{{consumerId}}"] }
+          },
+          "response": []
+        }
+
+      ]
+    },
+
+    {
+      "name": "03 — Mock Servers",
+      "item": [
+
+        {
+          "name": "Create Mock Server",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/mocks", "host": ["{{baseUrl}}"], "path": ["api","v1","mocks"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"User Service Mock\",\n  \"contractId\": \"c1a2b3c4-d5e6-7890-abcd-ef1234567890\",\n  \"microserviceId\": \"user-svc-001\",\n  \"isPrivate\": false,\n  \"delayMs\": 0\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "body": "{\n  \"id\": \"ms-001\",\n  \"name\": \"User Service Mock\",\n  \"contractId\": \"c1a2b3c4-d5e6-7890-abcd-ef1234567890\",\n  \"mockUrl\": \"mock-abc12345\",\n  \"mockServerUrl\": \"https://forgestudio.probestack.io/contractTesting/mock/mock-abc12345\",\n  \"isPrivate\": false,\n  \"delayMs\": 0,\n  \"requestCount\": 0,\n  \"createdAt\": \"2026-06-08T10:00:00Z\",\n  \"updatedAt\": \"2026-06-08T10:00:00Z\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Generate Mock from Contract Spec",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/mocks/generate-from-spec", "host": ["{{baseUrl}}"], "path": ["api","v1","mocks","generate-from-spec"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contractId\": \"c1a2b3c4-d5e6-7890-abcd-ef1234567890\",\n  \"mockServiceName\": \"User Service Mock\",\n  \"responseLatencyMs\": 0,\n  \"isPrivate\": false\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Parses the contract's uploaded spec and auto-creates all mock endpoints with example response bodies."
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "body": "{\n  \"mockServer\": {\n    \"id\": \"ms-001\",\n    \"name\": \"User Service Mock\",\n    \"mockUrl\": \"mock-abc12345\",\n    \"mockServerUrl\": \"https://forgestudio.probestack.io/contractTesting/mock/mock-abc12345\",\n    \"isPrivate\": false,\n    \"delayMs\": 0,\n    \"requestCount\": 0\n  },\n  \"totalEndpoints\": 3,\n  \"endpoints\": [\n    {\n      \"id\": \"ep-001\",\n      \"mockId\": \"ms-001\",\n      \"path\": \"/users\",\n      \"method\": \"GET\",\n      \"responseStatus\": 200,\n      \"responseBody\": \"[{\\\"id\\\":\\\"00000000-0000-0000-0000-000000000000\\\",\\\"name\\\":\\\"string\\\",\\\"email\\\":\\\"user@example.com\\\"}]\",\n      \"isActive\": true,\n      \"validationMode\": \"NONE\"\n    },\n    {\n      \"id\": \"ep-002\",\n      \"mockId\": \"ms-001\",\n      \"path\": \"/users\",\n      \"method\": \"POST\",\n      \"responseStatus\": 200,\n      \"responseBody\": \"{\\\"id\\\":\\\"00000000-0000-0000-0000-000000000000\\\",\\\"name\\\":\\\"string\\\",\\\"email\\\":\\\"user@example.com\\\"}\",\n      \"requestBodySample\": \"{\\\"name\\\":\\\"string\\\",\\\"email\\\":\\\"user@example.com\\\"}\",\n      \"isActive\": true,\n      \"validationMode\": \"NONE\"\n    },\n    {\n      \"id\": \"ep-003\",\n      \"mockId\": \"ms-001\",\n      \"path\": \"/users/{id}\",\n      \"method\": \"GET\",\n      \"responseStatus\": 200,\n      \"responseBody\": \"{\\\"id\\\":\\\"00000000-0000-0000-0000-000000000000\\\",\\\"name\\\":\\\"string\\\",\\\"email\\\":\\\"user@example.com\\\"}\",\n      \"isActive\": true,\n      \"validationMode\": \"NONE\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "List Mock Servers",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/mocks?limit=20&offset=0",
+              "host": ["{{baseUrl}}"],
+              "path": ["api","v1","mocks"],
+              "query": [
+                { "key": "microserviceId", "value": "", "disabled": true },
+                { "key": "limit",          "value": "20" },
+                { "key": "offset",         "value": "0" }
+              ]
+            }
+          },
+          "response": []
+        },
+
+        {
+          "name": "Get Mock Server by ID",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/v1/mocks/{{mockId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","mocks","{{mockId}}"] }
+          },
+          "response": []
+        },
+
+        {
+          "name": "Get Mock Server by URL Slug",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/v1/mocks/by-url/{{mockUrl}}", "host": ["{{baseUrl}}"], "path": ["api","v1","mocks","by-url","{{mockUrl}}"] }
+          },
+          "response": []
+        },
+
+        {
+          "name": "Update Mock Server",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/mocks/{{mockId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","mocks","{{mockId}}"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"User Service Mock v2\",\n  \"isPrivate\": true,\n  \"delayMs\": 200\n}"
+            }
+          },
+          "response": []
+        },
+
+        {
+          "name": "Toggle Privacy",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/api/v1/mocks/{{mockId}}/toggle-privacy", "host": ["{{baseUrl}}"], "path": ["api","v1","mocks","{{mockId}}","toggle-privacy"] }
+          },
+          "response": []
+        },
+
+        {
+          "name": "Run All Endpoints",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/api/v1/mocks/{{mockId}}/run", "host": ["{{baseUrl}}"], "path": ["api","v1","mocks","{{mockId}}","run"] },
+            "description": "Executes all active endpoints and returns a pass/fail summary."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"mockServerId\": \"ms-001\",\n  \"mockServerName\": \"User Service Mock\",\n  \"totalEndpoints\": 3,\n  \"successCount\": 3,\n  \"failureCount\": 0,\n  \"results\": [\n    {\n      \"endpointId\": \"ep-001\",\n      \"method\": \"GET\",\n      \"path\": \"/users\",\n      \"statusCode\": 200,\n      \"statusText\": \"OK\",\n      \"responseTimeMs\": 12,\n      \"success\": true,\n      \"responseBody\": \"[{\\\"id\\\":\\\"00000000-0000-0000-0000-000000000000\\\",\\\"name\\\":\\\"string\\\"}]\"\n    }\n  ]\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Server Logs",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/mocks/{{mockId}}/logs?limit=50&offset=0",
+              "host": ["{{baseUrl}}"],
+              "path": ["api","v1","mocks","{{mockId}}","logs"],
+              "query": [
+                { "key": "limit",  "value": "50" },
+                { "key": "offset", "value": "0" }
+              ]
+            },
+            "description": "All requests to this mock server across all endpoints, newest first."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "[\n  {\n    \"id\": \"log-001\",\n    \"timestamp\": \"2026-06-08T10:10:00Z\",\n    \"method\": \"GET\",\n    \"path\": \"/users\",\n    \"responseStatus\": 200,\n    \"responseTimeMs\": 8,\n    \"consumerName\": \"order-service\",\n    \"consumerVersion\": \"2.1.0\",\n    \"sessionId\": \"sess-xyz\"\n  }\n]"
+            }
+          ]
+        },
+
+        {
+          "name": "Reset Stats",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/api/v1/mocks/{{mockId}}/reset-stats", "host": ["{{baseUrl}}"], "path": ["api","v1","mocks","{{mockId}}","reset-stats"] },
+            "description": "Resets requestCount to 0."
+          },
+          "response": []
+        },
+
+        {
+          "name": "Delete Mock Server",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/api/v1/mocks/{{mockId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","mocks","{{mockId}}"] }
+          },
+          "response": []
+        }
+
+      ]
+    },
+
+    {
+      "name": "04 — Mock Endpoints",
+      "item": [
+
+        {
+          "name": "Create Endpoint",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/mocks/{{mockId}}/endpoints", "host": ["{{baseUrl}}"], "path": ["api","v1","mocks","{{mockId}}","endpoints"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"path\": \"/users\",\n  \"method\": \"GET\",\n  \"responseStatus\": 200,\n  \"responseHeaders\": {\n    \"Content-Type\": \"application/json\",\n    \"X-Request-Id\": \"req-123\"\n  },\n  \"responseBody\": \"[{\\\"id\\\":\\\"user-001\\\",\\\"name\\\":\\\"Alice\\\",\\\"email\\\":\\\"alice@example.com\\\"}]\",\n  \"delayMs\": 0,\n  \"validationMode\": \"NONE\",\n  \"validateMethod\": true\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "body": "{\n  \"id\": \"ep-001\",\n  \"mockId\": \"ms-001\",\n  \"path\": \"/users\",\n  \"method\": \"GET\",\n  \"responseStatus\": 200,\n  \"responseBody\": \"[{\\\"id\\\":\\\"user-001\\\",\\\"name\\\":\\\"Alice\\\",\\\"email\\\":\\\"alice@example.com\\\"}]\",\n  \"delayMs\": 0,\n  \"isActive\": true,\n  \"validationMode\": \"NONE\",\n  \"validateMethod\": true,\n  \"createdAt\": \"2026-06-08T10:00:00Z\",\n  \"updatedAt\": \"2026-06-08T10:00:00Z\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Create Endpoint (EXACT_MATCH validation)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/mocks/{{mockId}}/endpoints", "host": ["{{baseUrl}}"], "path": ["api","v1","mocks","{{mockId}}","endpoints"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"path\": \"/users\",\n  \"method\": \"POST\",\n  \"responseStatus\": 201,\n  \"responseBody\": \"{\\\"id\\\":\\\"user-002\\\",\\\"name\\\":\\\"Bob\\\",\\\"email\\\":\\\"bob@example.com\\\"}\",\n  \"delayMs\": 0,\n  \"requestBodySample\": \"{\\\"name\\\":\\\"Bob\\\",\\\"email\\\":\\\"bob@example.com\\\"}\",\n  \"validationMode\": \"EXACT_MATCH\",\n  \"validateMethod\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Incoming body must exactly match requestBodySample (whitespace-normalised JSON comparison)."
+          },
+          "response": []
+        },
+
+        {
+          "name": "Create Endpoint (JSON_SCHEMA validation)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/mocks/{{mockId}}/endpoints", "host": ["{{baseUrl}}"], "path": ["api","v1","mocks","{{mockId}}","endpoints"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"path\": \"/users\",\n  \"method\": \"POST\",\n  \"responseStatus\": 201,\n  \"responseBody\": \"{\\\"id\\\":\\\"user-002\\\",\\\"name\\\":\\\"Bob\\\",\\\"email\\\":\\\"bob@example.com\\\"}\",\n  \"delayMs\": 0,\n  \"requestBodySample\": \"{\\\"name\\\":\\\"Bob\\\",\\\"email\\\":\\\"bob@example.com\\\"}\",\n  \"validationMode\": \"JSON_SCHEMA\",\n  \"validationSchema\": \"{\\\"type\\\":\\\"object\\\",\\\"required\\\":[\\\"name\\\",\\\"email\\\"],\\\"properties\\\":{\\\"name\\\":{\\\"type\\\":\\\"string\\\"},\\\"email\\\":{\\\"type\\\":\\\"string\\\",\\\"format\\\":\\\"email\\\"}}}\",\n  \"validateMethod\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Incoming body is validated against the JSON Schema in validationSchema."
+          },
+          "response": []
+        },
+
+        {
+          "name": "List Endpoints",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/v1/mocks/{{mockId}}/endpoints", "host": ["{{baseUrl}}"], "path": ["api","v1","mocks","{{mockId}}","endpoints"] }
+          },
+          "response": []
+        },
+
+        {
+          "name": "Get Endpoint by ID",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/v1/mocks/{{mockId}}/endpoints/{{endpointId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","mocks","{{mockId}}","endpoints","{{endpointId}}"] }
+          },
+          "response": []
+        },
+
+        {
+          "name": "Update Endpoint",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/mocks/{{mockId}}/endpoints/{{endpointId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","mocks","{{mockId}}","endpoints","{{endpointId}}"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"responseStatus\": 200,\n  \"responseBody\": \"[{\\\"id\\\":\\\"user-001\\\",\\\"name\\\":\\\"Alice Updated\\\"}]\",\n  \"delayMs\": 100,\n  \"isActive\": true\n}"
+            }
+          },
+          "response": []
+        },
+
+        {
+          "name": "Toggle Endpoint Active",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/api/v1/mocks/{{mockId}}/endpoints/{{endpointId}}/toggle", "host": ["{{baseUrl}}"], "path": ["api","v1","mocks","{{mockId}}","endpoints","{{endpointId}}","toggle"] }
+          },
+          "response": []
+        },
+
+        {
+          "name": "Get Endpoint Logs",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/mocks/{{mockId}}/endpoints/{{endpointId}}/logs?limit=50&offset=0",
+              "host": ["{{baseUrl}}"],
+              "path": ["api","v1","mocks","{{mockId}}","endpoints","{{endpointId}}","logs"],
+              "query": [
+                { "key": "limit",  "value": "50" },
+                { "key": "offset", "value": "0" }
+              ]
+            }
+          },
+          "response": []
+        },
+
+        {
+          "name": "Delete Endpoint",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/api/v1/mocks/{{mockId}}/endpoints/{{endpointId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","mocks","{{mockId}}","endpoints","{{endpointId}}"] }
+          },
+          "response": []
+        }
+
+      ]
+    },
+
+    {
+      "name": "05 — Mock Runtime",
+      "item": [
+
+        {
+          "name": "Call Mock — GET /users",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Consumer-Name",    "value": "order-service",        "description": "Consumer identity for logging and rate limiting" },
+              { "key": "X-Consumer-Version", "value": "2.1.0",                "description": "Consumer version" },
+              { "key": "X-Session-Id",       "value": "sess-abc123",          "description": "Session tracking ID" }
+            ],
+            "url": { "raw": "{{baseUrl}}/mock/{{mockUrl}}/users", "host": ["{{baseUrl}}"], "path": ["mock","{{mockUrl}}","users"] }
+          },
+          "response": [
+            {
+              "name": "200 OK — endpoint matched",
+              "status": "OK",
+              "code": 200,
+              "body": "[{\"id\":\"user-001\",\"name\":\"Alice\",\"email\":\"alice@example.com\"}]"
+            },
+            {
+              "name": "404 — endpoint not configured",
+              "status": "Not Found",
+              "code": 404,
+              "body": "{\n  \"error\": \"Endpoint not found\",\n  \"message\": \"No mock endpoint configured for GET /users on mock server 'mock-abc12345'\",\n  \"hint\": \"Configure an endpoint for this path and method in your mock server settings\"\n}"
+            },
+            {
+              "name": "429 — rate limit exceeded",
+              "status": "Too Many Requests",
+              "code": 429,
+              "body": "{\n  \"error\": \"Rate limit exceeded\",\n  \"message\": \"Consumer order-service has exceeded the allowed requests per second\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Call Mock — POST /users",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",       "value": "application/json" },
+              { "key": "X-Consumer-Name",    "value": "order-service" },
+              { "key": "X-Consumer-Version", "value": "2.1.0" },
+              { "key": "X-Session-Id",       "value": "sess-abc123" }
+            ],
+            "url": { "raw": "{{baseUrl}}/mock/{{mockUrl}}/users", "host": ["{{baseUrl}}"], "path": ["mock","{{mockUrl}}","users"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Bob\",\n  \"email\": \"bob@example.com\"\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "body": "{\"id\":\"user-002\",\"name\":\"Bob\",\"email\":\"bob@example.com\"}"
+            },
+            {
+              "name": "400 — body validation failed",
+              "status": "Bad Request",
+              "code": 400,
+              "body": "{\n  \"error\": \"Request body does not match expected pattern\",\n  \"message\": \"Validation failed\"\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Call Mock — GET /users/{id} (path param)",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-Consumer-Name",    "value": "order-service" },
+              { "key": "X-Consumer-Version", "value": "2.1.0" }
+            ],
+            "url": { "raw": "{{baseUrl}}/mock/{{mockUrl}}/users/user-001", "host": ["{{baseUrl}}"], "path": ["mock","{{mockUrl}}","users","user-001"] },
+            "description": "Path param matching: endpoint configured as /users/{id} matches /users/user-001"
+          },
+          "response": []
+        }
+
+      ]
+    },
+
+    {
+      "name": "06 — Pact",
+      "item": [
+
+        {
+          "name": "Generate Pact from Mock Interactions",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/pact/generate", "host": ["{{baseUrl}}"], "path": ["api","v1","pact","generate"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"mockServerId\": \"ms-001\",\n  \"consumerName\": \"order-service\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Reads all recorded mock interactions for this consumer and generates a Pact file."
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "body": "{\n  \"status\": \"success\",\n  \"message\": \"Pact file generated\",\n  \"data\": {\n    \"id\": \"pf-001\",\n    \"consumerName\": \"order-service\",\n    \"consumerVersion\": \"2.1.0\",\n    \"providerName\": \"user-service\",\n    \"mockServerId\": \"ms-001\",\n    \"contractId\": \"c1a2b3c4-d5e6-7890-abcd-ef1234567890\",\n    \"generatedAt\": \"2026-06-08T10:15:00Z\",\n    \"status\": \"PENDING_VERIFICATION\",\n    \"interactions\": [\n      {\n        \"description\": \"GET /users\",\n        \"providerState\": \"\",\n        \"requestMethod\": \"GET\",\n        \"requestPath\": \"/users\",\n        \"responseStatus\": 200,\n        \"responseBody\": \"[{\\\"id\\\":\\\"user-001\\\",\\\"name\\\":\\\"Alice\\\"}]\"\n      }\n    ]\n  }\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "List Pacts by Contract",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/v1/pact/contract/{{contractId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","pact","contract","{{contractId}}"] }
+          },
+          "response": []
+        },
+
+        {
+          "name": "Get Pact File by ID",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/v1/pact/{{pactFileId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","pact","{{pactFileId}}"] }
+          },
+          "response": []
+        },
+
+        {
+          "name": "Download Pact File (Pact v2 JSON)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/v1/pact/{{pactFileId}}/download", "host": ["{{baseUrl}}"], "path": ["api","v1","pact","{{pactFileId}}","download"] },
+            "description": "Downloads the pact in standard Pact Specification v2 JSON format — ready for external Pact Broker."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "header": [
+                { "key": "Content-Type",        "value": "application/json" },
+                { "key": "Content-Disposition", "value": "attachment; filename=\"order-service-user-service.json\"" }
+              ],
+              "body": "{\n  \"consumer\": { \"name\": \"order-service\" },\n  \"provider\": { \"name\": \"user-service\" },\n  \"interactions\": [\n    {\n      \"description\": \"GET /users\",\n      \"providerState\": \"\",\n      \"request\": {\n        \"method\": \"GET\",\n        \"path\": \"/users\"\n      },\n      \"response\": {\n        \"status\": 200,\n        \"body\": [{\"id\": \"user-001\", \"name\": \"Alice\"}]\n      }\n    }\n  ],\n  \"metadata\": {\n    \"pactSpecification\": { \"version\": \"2.0.0\" }\n  }\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Verify Pact Against Provider",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/pact/{{pactFileId}}/verify", "host": ["{{baseUrl}}"], "path": ["api","v1","pact","{{pactFileId}}","verify"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contractId\": \"c1a2b3c4-d5e6-7890-abcd-ef1234567890\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Replays each pact interaction against the real provider (using contract.baseUrl) and saves a verification result."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"status\": \"success\",\n  \"data\": {\n    \"id\": \"pvr-001\",\n    \"pactFileId\": \"pf-001\",\n    \"contractId\": \"c1a2b3c4-d5e6-7890-abcd-ef1234567890\",\n    \"consumerName\": \"order-service\",\n    \"consumerVersion\": \"2.1.0\",\n    \"providerName\": \"user-service\",\n    \"providerVersion\": \"1.0.0\",\n    \"environment\": \"staging\",\n    \"verifiedAt\": \"2026-06-08T10:20:00Z\",\n    \"passed\": true,\n    \"interactionResults\": [\n      {\n        \"description\": \"GET /users\",\n        \"passed\": true,\n        \"actualStatus\": 200,\n        \"expectedStatus\": 200,\n        \"violations\": []\n      }\n    ]\n  }\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Get Verification Results by Contract",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/v1/pact/results/contract/{{contractId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","pact","results","contract","{{contractId}}"] }
+          },
+          "response": []
+        },
+
+        {
+          "name": "Can-I-Deploy",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pact/can-i-deploy?provider=user-service&version=1.0.0&env=staging",
+              "host": ["{{baseUrl}}"],
+              "path": ["api","v1","pact","can-i-deploy"],
+              "query": [
+                { "key": "provider", "value": "user-service" },
+                { "key": "version",  "value": "1.0.0" },
+                { "key": "env",      "value": "staging" }
+              ]
+            },
+            "description": "Checks whether a provider version is safe to deploy — all consumer pacts must be PASSED."
+          },
+          "response": [
+            {
+              "name": "200 OK — can deploy",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"status\": \"success\",\n  \"data\": {\n    \"canDeploy\": true,\n    \"providerName\": \"user-service\",\n    \"providerVersion\": \"1.0.0\",\n    \"environment\": \"staging\",\n    \"consumers\": [\n      {\n        \"consumerName\": \"order-service\",\n        \"consumerVersion\": \"2.1.0\",\n        \"pactFileId\": \"pf-001\",\n        \"verified\": true,\n        \"verificationResult\": \"PASSED\",\n        \"blockedReason\": null\n      }\n    ]\n  }\n}"
+            },
+            {
+              "name": "200 OK — cannot deploy",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"status\": \"success\",\n  \"data\": {\n    \"canDeploy\": false,\n    \"providerName\": \"user-service\",\n    \"providerVersion\": \"1.0.0\",\n    \"environment\": \"staging\",\n    \"consumers\": [\n      {\n        \"consumerName\": \"payment-service\",\n        \"consumerVersion\": \"1.5.0\",\n        \"pactFileId\": \"pf-002\",\n        \"verified\": false,\n        \"verificationResult\": \"NOT_RUN\",\n        \"blockedReason\": \"Pact has not been verified for this provider version and environment\"\n      }\n    ]\n  }\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Create Provider State",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/pact/provider-states", "host": ["{{baseUrl}}"], "path": ["api","v1","pact","provider-states"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contractId\": \"c1a2b3c4-d5e6-7890-abcd-ef1234567890\",\n  \"name\": \"user alice exists\",\n  \"setupEndpoint\": \"/pact/provider-states/setup\",\n  \"teardownEndpoint\": \"/pact/provider-states/teardown\",\n  \"params\": {\n    \"userId\": \"user-001\",\n    \"userName\": \"Alice\"\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Provider State is called before each pact interaction replay to seed test data."
+          },
+          "response": [
+            {
+              "name": "201 Created",
+              "status": "Created",
+              "code": 201,
+              "body": "{\n  \"status\": \"success\",\n  \"message\": \"Provider state saved\",\n  \"data\": {\n    \"id\": \"ps-001\",\n    \"contractId\": \"c1a2b3c4-d5e6-7890-abcd-ef1234567890\",\n    \"name\": \"user alice exists\",\n    \"setupEndpoint\": \"/pact/provider-states/setup\",\n    \"teardownEndpoint\": \"/pact/provider-states/teardown\",\n    \"params\": { \"userId\": \"user-001\", \"userName\": \"Alice\" }\n  }\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "List Provider States by Contract",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/v1/pact/provider-states/contract/{{contractId}}", "host": ["{{baseUrl}}"], "path": ["api","v1","pact","provider-states","contract","{{contractId}}"] }
+          },
+          "response": []
+        },
+
+        {
+          "name": "Delete Provider State",
+          "request": {
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/api/v1/pact/provider-states/ps-001", "host": ["{{baseUrl}}"], "path": ["api","v1","pact","provider-states","ps-001"] }
+          },
+          "response": []
+        }
+
+      ]
+    },
+
+    {
+      "name": "07 — Contract Diff",
+      "item": [
+
+        {
+          "name": "Diff Two Raw Specs",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/contract-diff", "host": ["{{baseUrl}}"], "path": ["api","v1","contract-diff"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contractId\": \"c1a2b3c4-d5e6-7890-abcd-ef1234567890\",\n  \"specV1\": \"openapi: 3.0.0\\ninfo:\\n  title: User API\\n  version: 1.0.0\\npaths:\\n  /users:\\n    get:\\n      responses:\\n        '200':\\n          description: OK\\n          content:\\n            application/json:\\n              schema:\\n                type: object\\n                required: [id, name]\\n                properties:\\n                  id:\\n                    type: string\\n                  name:\\n                    type: string\",\n  \"specV2\": \"openapi: 3.0.0\\ninfo:\\n  title: User API\\n  version: 2.0.0\\npaths:\\n  /users:\\n    get:\\n      responses:\\n        '200':\\n          description: OK\\n          content:\\n            application/json:\\n              schema:\\n                type: object\\n                required: [id, name, email]\\n                properties:\\n                  id:\\n                    type: string\\n                  name:\\n                    type: string\\n                  email:\\n                    type: string\"\n}"
+            }
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"status\": \"success\",\n  \"data\": {\n    \"contractId\": \"c1a2b3c4-d5e6-7890-abcd-ef1234567890\",\n    \"hasBreakingChanges\": true,\n    \"breakingChanges\": [\n      {\n        \"type\": \"REQUIRED_FIELD_ADDED\",\n        \"path\": \"email\",\n        \"previousValue\": null,\n        \"newValue\": \"string (required)\"\n      }\n    ],\n    \"nonBreakingChanges\": []\n  }\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Diff New Spec Against Stored Spec",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": { "raw": "{{baseUrl}}/api/v1/contract-diff/{{contractId}}/against-stored", "host": ["{{baseUrl}}"], "path": ["api","v1","contract-diff","{{contractId}}","against-stored"] },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"specV2\": \"openapi: 3.0.0\\ninfo:\\n  title: User API\\n  version: 2.0.0\\npaths:\\n  /users:\\n    get:\\n      responses:\\n        '200':\\n          description: OK\\n          content:\\n            application/json:\\n              schema:\\n                type: object\\n                required: [id, name, email]\\n                properties:\\n                  id:\\n                    type: string\\n                  name:\\n                    type: string\\n                  email:\\n                    type: string\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "description": "Diffs the submitted spec against what is currently stored for this contract. Use this before uploading to check if the change is safe."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"status\": \"success\",\n  \"data\": {\n    \"contractId\": \"c1a2b3c4-d5e6-7890-abcd-ef1234567890\",\n    \"hasBreakingChanges\": false,\n    \"breakingChanges\": [],\n    \"nonBreakingChanges\": [\n      {\n        \"type\": \"FIELD_ADDED\",\n        \"path\": \"email\",\n        \"previousValue\": null,\n        \"newValue\": \"string (optional)\"\n      }\n    ]\n  }\n}"
+            }
+          ]
+        }
+
+      ]
+    },
+
+    {
+      "name": "08 — Projects (Proxy)",
+      "item": [
+
+        {
+          "name": "List Projects",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/v1/projects", "host": ["{{baseUrl}}"], "path": ["api","v1","projects"] },
+            "description": "Proxied from fs-project-svc."
+          },
+          "response": []
+        },
+
+        {
+          "name": "Get Project by ID",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/v1/projects/project-id-here", "host": ["{{baseUrl}}"], "path": ["api","v1","projects","project-id-here"] }
+          },
+          "response": []
+        },
+
+        {
+          "name": "List Specs by Project",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/v1/projects/project-id-here/specs", "host": ["{{baseUrl}}"], "path": ["api","v1","projects","project-id-here","specs"] },
+            "description": "Proxied from fs-apispec-svc."
+          },
+          "response": []
+        },
+
+        {
+          "name": "Get Spec by ID",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/v1/specs/spec-id-here", "host": ["{{baseUrl}}"], "path": ["api","v1","specs","spec-id-here"] }
+          },
+          "response": []
+        }
+
+      ]
+    },
+
+    {
+      "name": "09 — Health & Docs",
+      "item": [
+
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/actuator/health", "host": ["{{baseUrl}}"], "path": ["actuator","health"] }
+          },
+          "response": [
+            {
+              "name": "200 UP",
+              "status": "OK",
+              "code": 200,
+              "body": "{\n  \"status\": \"UP\",\n  \"components\": {\n    \"mongo\": { \"status\": \"UP\" },\n    \"diskSpace\": { \"status\": \"UP\" }\n  }\n}"
+            }
+          ]
+        },
+
+        {
+          "name": "Swagger UI",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/swagger-ui.html", "host": ["{{baseUrl}}"], "path": ["swagger-ui.html"] },
+            "description": "Opens the interactive Swagger UI for this service."
+          },
+          "response": []
+        },
+
+        {
+          "name": "OpenAPI Spec (JSON)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/v3/api-docs", "host": ["{{baseUrl}}"], "path": ["v3","api-docs"] }
+          },
+          "response": []
+        }
+
+      ]
+    }
+
+  ]
+}
