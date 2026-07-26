@@ -40,6 +40,7 @@ public class SpecImportService {
     private final SpecParserService specParserService;
     private final MockServersService mockServersService;
     private final MockEndpointService mockEndpointService;
+    private static final Random RANDOM = new Random();
     private final ObjectMapper objectMapper;
 
     @Value("${mock.service.base-url:http://localhost:8090/mock}")
@@ -150,7 +151,10 @@ public class SpecImportService {
         if (mediaType == null || mediaType.getSchema() == null) return "{}";
 
         try {
-            Object example = buildExampleFromSchema(mediaType.getSchema());
+            // dynamic=true: ID-like fields become {{randomInt}} template tokens so the
+            // runtime (MockRuntimeService.renderResponseTemplate) generates a fresh
+            // value per call instead of freezing one random ID forever.
+            Object example = buildExampleFromSchema(mediaType.getSchema(), true);
             return objectMapper.writeValueAsString(example);
         } catch (Exception e) {
             return "{}";
@@ -169,17 +173,36 @@ public class SpecImportService {
         if (mediaType == null || mediaType.getSchema() == null) return "{}";
 
         try {
-            Object example = buildExampleFromSchema(mediaType.getSchema());
+            // dynamic=false: request samples must stay concrete (they're used as
+            // literal comparison values under EXACT_MATCH validation), never a template.
+            Object example = buildExampleFromSchema(mediaType.getSchema(), false);
             return objectMapper.writeValueAsString(example);
         } catch (Exception e) {
             return "{}";
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private Object buildExampleFromSchema(Schema<?> schema) {
+    private Object buildExampleFromSchema(Schema<?> schema, boolean dynamic) {
+        return buildExampleFromSchema(null, schema, dynamic);
+    }
+
+    /**
+     * Builds a realistic example value from an OpenAPI schema. Prefers, in order:
+     * an explicit `example`, an `enum`'s first value, a `default`, a format-specific
+     * value (email/uuid/date-time/...), then a name-based heuristic keyed off the
+     * property name (e.g. "customerId" -> "CUST-1234", "status" -> "ACTIVE").
+     * Falls back to the literal "string"/0/true only when none of the above apply
+     * — i.e. when the spec genuinely gives no hint about what the value should look like.
+     *
+     * @param dynamic when true (response examples), ID-like fields render as
+     *                "{{randomInt}}" template tokens so MockRuntimeService generates
+     *                a fresh value per call instead of a value frozen forever.
+     */
+    private Object buildExampleFromSchema(String propertyName, Schema<?> schema, boolean dynamic) {
         if (schema == null) return Map.of();
         if (schema.getExample() != null) return schema.getExample();
+        if (schema.getEnum() != null && !schema.getEnum().isEmpty()) return schema.getEnum().get(0);
+        if (schema.getDefault() != null) return schema.getDefault();
 
         String type = schema.getType();
         if (type == null && schema.getProperties() != null) type = "object";
@@ -190,15 +213,17 @@ public class SpecImportService {
                 Map<String, Object> obj = new LinkedHashMap<>();
                 if (schema.getProperties() != null) {
                     schema.getProperties().forEach((name, prop) ->
-                            obj.put(name, buildExampleFromSchema((Schema<?>) prop)));
+                            obj.put(name, buildExampleFromSchema(name, (Schema<?>) prop, dynamic)));
                 }
                 yield obj;
             }
             case "array" -> {
                 Schema<?> items = schema.getItems();
-                yield items != null ? List.of(buildExampleFromSchema(items)) : List.of();
+                yield items != null ? List.of(buildExampleFromSchema(propertyName, items, dynamic)) : List.of();
             }
-            case "string"  -> schema.getFormat() != null ? exampleForFormat(schema.getFormat()) : "string";
+            case "string"  -> schema.getFormat() != null
+                    ? exampleForFormat(schema.getFormat(), dynamic)
+                    : exampleForPropertyName(propertyName, dynamic);
             case "integer" -> 0;
             case "number"  -> 0.0;
             case "boolean" -> true;
@@ -206,15 +231,36 @@ public class SpecImportService {
         };
     }
 
-    private String exampleForFormat(String format) {
+    private String exampleForFormat(String format, boolean dynamic) {
         return switch (format) {
-            case "date-time" -> "2024-01-01T00:00:00Z";
+            case "date-time" -> dynamic ? "{{timestamp}}" : "2024-01-01T00:00:00Z";
             case "date"      -> "2024-01-01";
             case "email"     -> "user@example.com";
-            case "uuid"      -> "00000000-0000-0000-0000-000000000000";
+            case "uuid"      -> dynamic ? "{{uuid}}" : "00000000-0000-0000-0000-000000000000";
             case "uri"       -> "https://example.com";
             default          -> "string";
         };
+    }
+
+    /** Name-based fallback for unformatted string properties, so specs without explicit
+     *  examples/enums still produce plausible values instead of a literal "string". */
+    private String exampleForPropertyName(String propertyName, boolean dynamic) {
+        if (propertyName == null || propertyName.isBlank()) return "string";
+        String lower = propertyName.toLowerCase();
+
+        if (lower.endsWith("id")) {
+            String prefix = propertyName.replaceAll("(?i)id$", "").replaceAll("[^A-Za-z]", "");
+            String tag = prefix.isBlank() ? "ID" : prefix.substring(0, Math.min(4, prefix.length())).toUpperCase();
+            return dynamic ? tag + "-{{randomInt}}" : tag + "-" + (1000 + RANDOM.nextInt(9000));
+        }
+        if (lower.contains("token"))                          return dynamic ? "{{uuid}}" : "sample-token-value";
+        if (lower.contains("email"))                          return "user@example.com";
+        if (lower.contains("phone"))                          return "+1-555-0100";
+        if (lower.equals("status") || lower.equals("state"))  return "ACTIVE";
+        if (lower.contains("name"))                           return "Jane Doe";
+        if (lower.contains("address"))                        return "123 Main St";
+        if (lower.contains("url") || lower.contains("uri"))   return "https://example.com";
+        return "string";
     }
 
     private String generateUniqueMockUrl() {

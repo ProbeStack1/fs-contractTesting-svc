@@ -14,6 +14,7 @@ import com.forge.contracttesting.model.Consumer;
 import com.forge.contracttesting.model.MockEndpoint;
 import com.forge.contracttesting.model.MockRequestLog;
 import com.forge.contracttesting.model.MockServer;
+import com.forge.contracttesting.model.RateLimitBucket;
 import com.forge.contracttesting.repository.ConsumerRepository;
 import com.forge.contracttesting.repository.MockEndpointRepository;
 import com.forge.contracttesting.repository.MockRequestLogRepository;
@@ -22,6 +23,11 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.mongodb.core.FindAndModifyOptions;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -30,7 +36,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Service
@@ -42,12 +47,10 @@ public class MockRuntimeService {
     private final MockRequestLogRepository mockRequestLogRepository;
     private final ConsumerRepository consumerRepository;
     private final ObjectMapper objectMapper;
+    private final MongoTemplate mongoTemplate;
 
     @Value("${mock.service.base-url:http://localhost:8090/mock}")
     private String mockServiceBaseUrl;
-
-    // Sliding-window rate limit buckets: key = "mockId:consumerName", value = [windowStartMs, count]
-    private final ConcurrentHashMap<String, long[]> rateLimitBuckets = new ConcurrentHashMap<>();
 
     private record ValidationResult(boolean valid, String expectedBody) {}
 
@@ -127,7 +130,7 @@ public class MockRuntimeService {
 
             applyDelay(endpoint.getDelayMs());
             responseStatus = endpoint.getResponseStatus() != null ? endpoint.getResponseStatus() : 200;
-            responseBody   = endpoint.getResponseBody();
+            responseBody   = renderResponseTemplate(endpoint.getResponseBody(), requestBody, request);
 
             HttpHeaders headers = new HttpHeaders();
             if (endpoint.getResponseHeaders() != null) {
@@ -199,7 +202,7 @@ public class MockRuntimeService {
             applyDelay(endpoint.getDelayMs());
             long responseTimeMs = System.currentTimeMillis() - start;
             int statusCode = endpoint.getResponseStatus() != null ? endpoint.getResponseStatus() : 200;
-            String responseBodyStr = endpoint.getResponseBody();
+            String responseBodyStr = renderResponseTemplate(endpoint.getResponseBody(), requestBody, null);
 
             logExecution(mockServer, resolvedPath, method, requestBody,
                     statusCode, responseBodyStr, responseTimeMs);
@@ -258,6 +261,78 @@ public class MockRuntimeService {
         }
     }
 
+    // ── Response templating ───────────────────────────────────────────────────
+    // Lets a configured responseBody echo request data or generate a fresh
+    // value per call instead of being a frozen static string. Tokens are
+    // resolved as plain text substitution against the raw JSON template, so
+    // the author is responsible for quoting: use "{{...}}" for string values,
+    // bare {{...}} for numbers/booleans/objects. Supported tokens:
+    //   {{request.body.<dot.path>}}   - value from the parsed request JSON body
+    //   {{request.header.<name>}}     - request header value
+    //   {{request.query.<name>}}      - query-string parameter value
+    //   {{uuid}}                      - random UUID, fresh per request
+    //   {{randomInt}}                 - random 4-digit int, fresh per request
+    //   {{timestamp}}                 - current instant (ISO-8601)
+    // Unresolvable tokens are left as-is rather than silently blanked, so a
+    // misconfigured template is visible in the response instead of hidden.
+    private static final java.util.regex.Pattern TEMPLATE_TOKEN =
+            java.util.regex.Pattern.compile("\\{\\{\\s*([a-zA-Z0-9_.]+)\\s*}}");
+
+    private String renderResponseTemplate(String template, String requestBody, HttpServletRequest request) {
+        if (template == null || !template.contains("{{")) return template;
+
+        JsonNode bodyNode = null;
+        if (requestBody != null && !requestBody.isBlank()) {
+            try { bodyNode = objectMapper.readTree(requestBody); }
+            catch (Exception e) { bodyNode = null; }
+        }
+
+        java.util.regex.Matcher matcher = TEMPLATE_TOKEN.matcher(template);
+        StringBuilder result = new StringBuilder();
+        while (matcher.find()) {
+            String replacement = resolveTemplateToken(matcher.group(1), bodyNode, request);
+            matcher.appendReplacement(result, java.util.regex.Matcher.quoteReplacement(
+                    replacement != null ? replacement : matcher.group(0)));
+        }
+        matcher.appendTail(result);
+        return result.toString();
+    }
+
+    private String resolveTemplateToken(String token, JsonNode bodyNode, HttpServletRequest request) {
+        if ("uuid".equals(token))      return UUID.randomUUID().toString();
+        if ("randomInt".equals(token)) return String.valueOf(1000 + new Random().nextInt(9000));
+        if ("timestamp".equals(token)) return Instant.now().toString();
+
+        if (token.startsWith("request.body.")) {
+            return bodyNode == null ? null
+                    : resolveJsonPath(bodyNode, token.substring("request.body.".length()));
+        }
+        if (request != null && token.startsWith("request.header.")) {
+            return request.getHeader(token.substring("request.header.".length()));
+        }
+        if (request != null && token.startsWith("request.query.")) {
+            return request.getParameter(token.substring("request.query.".length()));
+        }
+        return null;
+    }
+
+    private String resolveJsonPath(JsonNode root, String dotPath) {
+        JsonNode current = root;
+        for (String part : dotPath.split("\\.")) {
+            if (current == null) return null;
+            current = current.get(part);
+        }
+        if (current == null || current.isMissingNode() || current.isNull()) return null;
+        if (current.isTextual()) {
+            try {
+                String jsonEscaped = objectMapper.writeValueAsString(current.asText());
+                return jsonEscaped.substring(1, jsonEscaped.length() - 1); // strip outer quotes, keep escaping
+            } catch (Exception e) { return current.asText(); }
+        }
+        if (current.isValueNode()) return current.asText();
+        return current.toString();
+    }
+
     private ValidationResult validateRequestBody(String incomingBody, MockEndpoint endpoint) {
         String mode = endpoint.getValidationMode();
         if (mode == null || "NONE".equals(mode)) return new ValidationResult(true, null);
@@ -266,8 +341,7 @@ public class MockRuntimeService {
         if (sample == null || sample.isBlank()) return new ValidationResult(true, null);
 
         if ("EXACT_MATCH".equals(mode)) {
-            boolean valid = normalizeJson(incomingBody).equals(normalizeJson(sample));
-            return new ValidationResult(valid, prettyPrintJson(sample));
+            return new ValidationResult(jsonEquals(incomingBody, sample), prettyPrintJson(sample));
         }
         if ("JSON_SCHEMA".equals(mode)) {
             String schemaJson = endpoint.getValidationSchema();
@@ -277,9 +351,13 @@ public class MockRuntimeService {
         return new ValidationResult(true, null);
     }
 
-    private String normalizeJson(String json) {
-        if (json == null) return "";
-        return json.trim().replaceAll("\\s+", "");
+    /** Deep, key-order-independent JSON equality (parses both sides rather than comparing raw text). */
+    private boolean jsonEquals(String a, String b) {
+        try {
+            return objectMapper.readTree(a).equals(objectMapper.readTree(b));
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private boolean validateJsonSchema(String json, String schemaJson) {
@@ -304,9 +382,22 @@ public class MockRuntimeService {
         } catch (Exception e) { return json; }
     }
 
+    /**
+     * Segment-by-segment match: {param} segments match anything, literal segments
+     * must match exactly. Avoids treating regex metacharacters in literal path
+     * segments (e.g. a literal ".") as wildcards.
+     */
     private boolean pathMatchesPattern(String actualPath, String patternPath) {
-        String regex = patternPath.replaceAll("\\{[^}]+}", "[^/]+");
-        return actualPath.matches(regex);
+        String[] patternSegments = patternPath.split("/", -1);
+        String[] actualSegments  = actualPath.split("/", -1);
+        if (patternSegments.length != actualSegments.length) return false;
+
+        for (int i = 0; i < patternSegments.length; i++) {
+            String seg = patternSegments[i];
+            boolean isParam = seg.startsWith("{") && seg.endsWith("}");
+            if (!isParam && !seg.equals(actualSegments[i])) return false;
+        }
+        return true;
     }
 
     private void applyDelay(Integer delayMs) {
@@ -374,9 +465,14 @@ public class MockRuntimeService {
     }
 
     /**
-     * Sliding-window rate limiter.
-     * Returns true (= block request) when the consumer has exceeded Consumer.apiTps
-     * requests within the current 1-second window.
+     * Fixed-window (1s, epoch-aligned) rate limiter backed by Mongo instead of
+     * a JVM-local map. The old ConcurrentHashMap only tracked counts within the
+     * pod that handled the request, so under horizontal scaling (multiple
+     * replicas behind a load balancer) the configured Consumer.apiTps was only
+     * enforced per-pod, not per-consumer — e.g. a limit of 5 tps became 5 tps
+     * per replica. findAndModify's increment is atomic in Mongo, so counts are
+     * consistent across all replicas. The bucket document self-expires via a
+     * TTL index on expiresAt (see RateLimitBucket).
      */
     private boolean isRateLimited(String consumerName, String mockId) {
         List<Consumer> consumers = consumerRepository.findByConsumerName(consumerName);
@@ -390,15 +486,17 @@ public class MockRuntimeService {
         catch (NumberFormatException e) { return false; }
         if (tps <= 0) return false;
 
-        String key = mockId + ":" + consumerName;
-        long now = System.currentTimeMillis();
+        long windowEpochSecond = System.currentTimeMillis() / 1000L;
+        String key = mockId + ":" + consumerName + ":" + windowEpochSecond;
 
-        long[] bucket = rateLimitBuckets.compute(key, (k, v) -> {
-            if (v == null || now - v[0] >= 1000L) return new long[]{now, 1};
-            return new long[]{v[0], v[1] + 1};
-        });
+        Query query = Query.query(Criteria.where("_id").is(key));
+        Update update = new Update()
+                .inc("count", 1)
+                .setOnInsert("expiresAt", Instant.now().plusSeconds(5));
+        FindAndModifyOptions options = FindAndModifyOptions.options().upsert(true).returnNew(true);
 
-        return bucket[1] > tps;
+        RateLimitBucket bucket = mongoTemplate.findAndModify(query, update, options, RateLimitBucket.class);
+        return bucket != null && bucket.getCount() > tps;
     }
 
     private boolean isMethodAllowed(MockEndpoint endpoint, String method) {
