@@ -139,9 +139,17 @@ public class ContractService {
         Contract c = getById(id);
         c.setValidatorRules(rules);
 
-        // Merge validator tests with existing non-validator tests
+        // Upsert by test id: replace any existing test that shares an id with an
+        // incoming test, keep everything else untouched. Category-based filtering
+        // is not reliable here since callers are not guaranteed to tag tests with
+        // a "validator" category, and blindly appending duplicates test ids on
+        // every save (inflating run totals).
+        Set<String> incomingIds = generatedTests.stream()
+                .map(ContractTest::getId)
+                .collect(Collectors.toSet());
+
         List<ContractTest> existing = c.getTests().stream()
-                .filter(t -> !"validator".equals(t.getCategory()))
+                .filter(t -> !incomingIds.contains(t.getId()))
                 .toList();
 
         List<ContractTest> merged = new ArrayList<>(existing);

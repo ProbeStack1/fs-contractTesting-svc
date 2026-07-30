@@ -99,7 +99,14 @@ public class SchemaValidationEngine {
             Map<String, Schema> properties = schema.getProperties();
             if (properties == null) return;
             properties.forEach((fieldName, fieldSchema) -> {
+                // OpenAPI 3.1 documents are parsed into Schema.types (a Set) rather than
+                // the legacy singular Schema.type, since swagger-models only mirrors the
+                // value into getType() when the "bind-type" system property is enabled
+                // (off by default). Check both so 3.1 specs aren't flagged as untyped.
                 String type = fieldSchema.getType();
+                if (type == null && fieldSchema.getTypes() != null && fieldSchema.getTypes().size() == 1) {
+                    type = (String) fieldSchema.getTypes().iterator().next();
+                }
                 boolean hasRef = fieldSchema.get$ref() != null;
                 boolean hasComposition = fieldSchema.getAllOf() != null
                         || fieldSchema.getOneOf() != null
