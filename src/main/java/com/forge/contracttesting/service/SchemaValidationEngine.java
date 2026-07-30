@@ -193,7 +193,15 @@ public class SchemaValidationEngine {
                 continue;
             }
 
-            boolean hasJson = successes.values().stream().anyMatch(resp -> {
+            // 204/304 responses never carry a body, so they can't satisfy (or fail)
+            // a content-type check — exclude them rather than relying on DELETE as
+            // a stand-in for "no body expected".
+            List<ApiResponse> bodied = successes.entrySet().stream()
+                    .filter(e -> !"204".equals(e.getKey()) && !"304".equals(e.getKey()))
+                    .map(Map.Entry::getValue)
+                    .toList();
+
+            boolean hasJson = bodied.isEmpty() || bodied.stream().anyMatch(resp -> {
                 if (resp.getContent() == null) return false;
                 return resp.getContent().containsKey("application/json")
                         || resp.getContent().containsKey("*/*");
@@ -236,6 +244,10 @@ public class SchemaValidationEngine {
         }
 
         ep.getSuccessResponses().forEach((code, resp) -> {
+            // 204 No Content (and 304 Not Modified) are defined by HTTP to never carry
+            // a body, so absent `content` there is correct, not a violation.
+            if ("204".equals(code) || "304".equals(code)) return;
+
             if (resp.getContent() == null) {
                 result.addViolation(new ValidationViolation(
                         ep.getMethod() + " " + ep.getPath() + " [" + code + "]",
