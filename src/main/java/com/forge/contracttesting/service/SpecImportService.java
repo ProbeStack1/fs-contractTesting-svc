@@ -227,7 +227,12 @@ public class SpecImportService {
             case "integer" -> 0;
             case "number"  -> 0.0;
             case "boolean" -> true;
-            default        -> null;
+            // Unknown/malformed type value (e.g. a spec authored with "type": "format"
+            // instead of "type": "string", "format": "email"): still emit a placeholder
+            // rather than null, since null is stripped by Jackson's non_null inclusion
+            // (application.properties) and would silently drop a declared field from
+            // the generated body entirely.
+            default        -> exampleForPropertyName(propertyName, dynamic);
         };
     }
 
@@ -257,6 +262,12 @@ public class SpecImportService {
         if (lower.contains("email"))                          return "user@example.com";
         if (lower.contains("phone"))                          return "+1-555-0100";
         if (lower.equals("status") || lower.equals("state"))  return "ACTIVE";
+        // Checked before the generic "name" match below, since "username" contains
+        // "name" as a substring but is a login handle, not a person's display name.
+        if (lower.contains("username") || lower.contains("login"))
+                                                               return dynamic ? "user{{randomInt}}" : "user" + (1000 + RANDOM.nextInt(9000));
+        if (lower.contains("password") || lower.contains("passwd"))
+                                                               return "P@ssw0rd123";
         if (lower.contains("name"))                           return "Jane Doe";
         if (lower.contains("address"))                        return "123 Main St";
         if (lower.contains("url") || lower.contains("uri"))   return "https://example.com";
