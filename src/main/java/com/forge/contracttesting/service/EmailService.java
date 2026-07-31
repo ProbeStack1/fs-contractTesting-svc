@@ -20,7 +20,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class EmailService {
 
-    private final SendGrid sendGrid;
+    private final SecretsService secretsService;
 
     @Value("${mail.from}")
     private String fromEmail;
@@ -34,6 +34,8 @@ public class EmailService {
      */
     public EmailDeliveryResult sendDynamicEmail(String toEmail, Map<String, Object> data, String templateId) {
         try {
+            SendGrid sendGrid = new SendGrid(secretsService.requireValue("SENDGRID_API_KEY"));
+
             Mail mail = new Mail();
             mail.setFrom(new Email(fromEmail));
             mail.setTemplateId(templateId);
@@ -63,6 +65,9 @@ public class EmailService {
 
         } catch (IOException e) {
             log.error("Failed to send approval email to {}: {}", toEmail, e.getMessage());
+            return new EmailDeliveryResult(false, null, null, e.getMessage());
+        } catch (IllegalStateException e) {
+            log.error("Cannot send approval email to {}: {}", toEmail, e.getMessage());
             return new EmailDeliveryResult(false, null, null, e.getMessage());
         }
     }

@@ -204,7 +204,14 @@ public class SpecImportService {
         if (schema.getEnum() != null && !schema.getEnum().isEmpty()) return schema.getEnum().get(0);
         if (schema.getDefault() != null) return schema.getDefault();
 
+        // OpenAPI 3.1 specs are parsed as JsonSchema (2020-12 dialect): getType() is
+        // always null there and the real type lives in getTypes() instead. Without this
+        // fallback every 3.1-authored field (string/integer/etc.) is mistaken for an
+        // untyped schema and silently rendered as {} below.
         String type = schema.getType();
+        if (type == null && schema.getTypes() != null && !schema.getTypes().isEmpty()) {
+            type = schema.getTypes().iterator().next();
+        }
         if (type == null && schema.getProperties() != null) type = "object";
         if (type == null) return Map.of();
 
