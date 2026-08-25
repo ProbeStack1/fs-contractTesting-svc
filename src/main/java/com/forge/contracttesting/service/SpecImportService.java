@@ -104,7 +104,7 @@ public class SpecImportService {
 
         List<EndpointResponse> endpointResponses = spec.getEndpoints().stream()
                 .map(ep -> {
-                    String responseBody = buildExampleResponse(ep);
+                    String responseBody = buildExampleResponse(ep, spec);
                     String requestBodySample = buildExampleRequest(ep);
 
                     MockEndpoint endpoint = MockEndpoint.builder()
@@ -139,26 +139,92 @@ public class SpecImportService {
 
     // ── Example generation from spec schemas ──────────────────────────────────
 
-    private String buildExampleResponse(EndpointInfo ep) {
-        Map<String, ApiResponse> successes = ep.getSuccessResponses();
-        if (successes.isEmpty()) return "{}";
+    private String buildExampleResponse(EndpointInfo ep, ParsedSpec spec) {
+        Schema<?> schema = extractResponseSchema(ep);
+        boolean wrapAsList = false;
 
-        ApiResponse apiResp = successes.values().iterator().next();
-        if (apiResp.getContent() == null) return "{}";
-
-        MediaType mediaType = apiResp.getContent().get("application/json");
-        if (mediaType == null) mediaType = apiResp.getContent().values().stream().findFirst().orElse(null);
-        if (mediaType == null || mediaType.getSchema() == null) return "{}";
+        // Auto-generated/template specs commonly declare responses with only a
+        // description ("200": {"description": "List of creates"}) and no content
+        // schema, even though the sibling request body is fully typed. Without this
+        // fallback every such response silently renders as "{}" while the request
+        // body next to it is fully populated.
+        if (schema == null) {
+            schema = resolveFallbackResponseSchema(ep, spec);
+            wrapAsList = schema != null && isListEndpoint(ep);
+        }
+        if (schema == null) return "{}";
 
         try {
             // dynamic=true: ID-like fields become {{randomInt}} template tokens so the
             // runtime (MockRuntimeService.renderResponseTemplate) generates a fresh
             // value per call instead of freezing one random ID forever.
-            Object example = buildExampleFromSchema(mediaType.getSchema(), true);
+            Object example = buildExampleFromSchema(schema, true);
+            if (wrapAsList) example = List.of(example);
             return objectMapper.writeValueAsString(example);
         } catch (Exception e) {
             return "{}";
         }
+    }
+
+    private Schema<?> extractResponseSchema(EndpointInfo ep) {
+        Map<String, ApiResponse> successes = ep.getSuccessResponses();
+        if (successes.isEmpty()) return null;
+
+        ApiResponse apiResp = successes.values().iterator().next();
+        if (apiResp.getContent() == null) return null;
+
+        MediaType mediaType = apiResp.getContent().get("application/json");
+        if (mediaType == null) mediaType = apiResp.getContent().values().stream().findFirst().orElse(null);
+        return mediaType != null ? mediaType.getSchema() : null;
+    }
+
+    /**
+     * Falls back to the request body's schema (POST/PUT typically echo back the
+     * resource they just wrote), then to a components.schemas entry matching the
+     * path's resource name (e.g. "/creates" -> "Create"), since neither is a
+     * proper substitute for a declared response schema but both are far closer
+     * to the real shape than an empty object.
+     */
+    private Schema<?> resolveFallbackResponseSchema(EndpointInfo ep, ParsedSpec spec) {
+        Schema<?> requestSchema = extractRequestSchema(ep);
+        if (requestSchema != null) return requestSchema;
+        return findSchemaByResourceName(ep.getPath(), spec);
+    }
+
+    private Schema<?> extractRequestSchema(EndpointInfo ep) {
+        if (ep.getOperation() == null || ep.getOperation().getRequestBody() == null) return null;
+        var content = ep.getOperation().getRequestBody().getContent();
+        if (content == null) return null;
+
+        MediaType mediaType = content.get("application/json");
+        if (mediaType == null) mediaType = content.values().stream().findFirst().orElse(null);
+        return mediaType != null ? mediaType.getSchema() : null;
+    }
+
+    private Schema<?> findSchemaByResourceName(String path, ParsedSpec spec) {
+        String resource = firstPathSegment(path);
+        if (resource == null) return null;
+        String singular = resource.length() > 1 && resource.endsWith("s")
+                ? resource.substring(0, resource.length() - 1) : resource;
+
+        for (String candidate : List.of(singular, resource)) {
+            for (Map.Entry<String, Schema<?>> entry : spec.getSchemas().entrySet()) {
+                if (entry.getKey().equalsIgnoreCase(candidate)) return entry.getValue();
+            }
+        }
+        return null;
+    }
+
+    private String firstPathSegment(String path) {
+        if (path == null) return null;
+        for (String segment : path.split("/")) {
+            if (!segment.isBlank() && !segment.startsWith("{")) return segment;
+        }
+        return null;
+    }
+
+    private boolean isListEndpoint(EndpointInfo ep) {
+        return "GET".equals(ep.getMethod()) && !ep.getPath().contains("{");
     }
 
     private String buildExampleRequest(EndpointInfo ep) {

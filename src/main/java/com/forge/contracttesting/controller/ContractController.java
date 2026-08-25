@@ -9,6 +9,7 @@ import com.forge.contracttesting.model.ContractStatus;
 import com.forge.contracttesting.model.ContractTest;
 import com.forge.contracttesting.model.TestRunHistory;
 import com.forge.contracttesting.repository.TestRunHistoryRepository;
+import com.forge.contracttesting.service.AuditLogService;
 import com.forge.contracttesting.service.ContractService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +36,7 @@ public class ContractController {
 
     private final ContractService contractService;
     private final TestRunHistoryRepository historyRepository;
+    private final AuditLogService auditLogService;
 
     // ── CRUD ──────────────────────────────────────────────────────────────────
 
@@ -42,8 +44,12 @@ public class ContractController {
     public ResponseEntity<ApiResponse<Contract>> create(
             @Valid @RequestBody ContractDto dto) {
         log.info("Create contract: {}", dto.getName());
+        Contract created = contractService.create(dto);
+        auditLogService.logEntityChange(AuditLogService.EntityAuditEvent.builder()
+                .entityType("CONTRACT").entityId(created.getId()).operation("CREATE")
+                .afterSnapshot(created).build());
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success("Contract created successfully", contractService.create(dto)));
+                .body(ApiResponse.success("Contract created successfully", created));
     }
 
     /**
@@ -71,12 +77,18 @@ public class ContractController {
     public ResponseEntity<ApiResponse<Contract>> update(
             @PathVariable String id,
             @RequestBody ContractDto dto) {
-        return ResponseEntity.ok(ApiResponse.success("Contract updated", contractService.update(id, dto)));
+        Contract updated = contractService.update(id, dto);
+        auditLogService.logEntityChange(AuditLogService.EntityAuditEvent.builder()
+                .entityType("CONTRACT").entityId(id).operation("UPDATE")
+                .afterSnapshot(updated).build());
+        return ResponseEntity.ok(ApiResponse.success("Contract updated", updated));
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> delete(@PathVariable String id) {
         contractService.delete(id);
+        auditLogService.logEntityChange(AuditLogService.EntityAuditEvent.builder()
+                .entityType("CONTRACT").entityId(id).operation("DELETE").build());
         return ResponseEntity.ok(ApiResponse.success("Contract deleted", null));
     }
 
