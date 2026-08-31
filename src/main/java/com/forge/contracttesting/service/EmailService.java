@@ -5,6 +5,7 @@ import com.sendgrid.Request;
 import com.sendgrid.Response;
 import com.sendgrid.SendGrid;
 import com.sendgrid.helpers.mail.Mail;
+import com.sendgrid.helpers.mail.objects.Content;
 import com.sendgrid.helpers.mail.objects.Email;
 import com.sendgrid.helpers.mail.objects.Personalization;
 import lombok.RequiredArgsConstructor;
@@ -13,7 +14,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
-import java.util.Map;
 
 @Slf4j
 @Service
@@ -26,23 +26,24 @@ public class EmailService {
     private String fromEmail;
 
     /**
-     * Send a SendGrid dynamic-template email.
+     * Send a fully self-contained HTML email — no SendGrid dashboard template
+     * required. The caller builds the complete HTML body itself.
      *
-     * @param toEmail    recipient address
-     * @param data       key/value pairs merged into the template
-     * @param templateId SendGrid template id (d-xxxx...)
+     * @param toEmail  recipient address
+     * @param subject  email subject line
+     * @param htmlBody complete HTML document/body to send as the message content
      */
-    public EmailDeliveryResult sendDynamicEmail(String toEmail, Map<String, Object> data, String templateId) {
+    public EmailDeliveryResult sendHtmlEmail(String toEmail, String subject, String htmlBody) {
         try {
             SendGrid sendGrid = new SendGrid(secretsService.requireValue("SENDGRID_API_KEY"));
 
             Mail mail = new Mail();
             mail.setFrom(new Email(fromEmail));
-            mail.setTemplateId(templateId);
+            mail.setSubject(subject);
+            mail.addContent(new Content("text/html", htmlBody));
 
             Personalization personalization = new Personalization();
             personalization.addTo(new Email(toEmail));
-            data.forEach(personalization::addDynamicTemplateData);
             mail.addPersonalization(personalization);
 
             Request request = new Request();
@@ -54,20 +55,19 @@ public class EmailService {
             boolean success = response.getStatusCode() >= 200 && response.getStatusCode() < 300;
 
             if (success) {
-                log.info("Approval email sent to {} via template {}. Status: {}",
-                        toEmail, templateId, response.getStatusCode());
+                log.info("Email '{}' sent to {}. Status: {}", subject, toEmail, response.getStatusCode());
             } else {
-                log.warn("SendGrid returned {} for template {} to {}: {}",
-                        response.getStatusCode(), templateId, toEmail, response.getBody());
+                log.warn("SendGrid returned {} for email '{}' to {}: {}",
+                        response.getStatusCode(), subject, toEmail, response.getBody());
             }
 
             return new EmailDeliveryResult(success, response.getStatusCode(), response.getBody(), null);
 
         } catch (IOException e) {
-            log.error("Failed to send approval email to {}: {}", toEmail, e.getMessage());
+            log.error("Failed to send email to {}: {}", toEmail, e.getMessage());
             return new EmailDeliveryResult(false, null, null, e.getMessage());
         } catch (IllegalStateException e) {
-            log.error("Cannot send approval email to {}: {}", toEmail, e.getMessage());
+            log.error("Cannot send email to {}: {}", toEmail, e.getMessage());
             return new EmailDeliveryResult(false, null, null, e.getMessage());
         }
     }

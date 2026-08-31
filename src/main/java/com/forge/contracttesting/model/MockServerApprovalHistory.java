@@ -69,4 +69,15 @@ public class MockServerApprovalHistory {
     // ── Endpoint snapshot (method, path, schema, sample body) ────────────────
 
     private List<Map<String, Object>> endpoints;
+
+    // ── Contract test results at send time ────────────────────────────────────
+
+    private Integer testTotal;
+    private Integer testPassed;
+    private Integer testFailed;
+
+    // ── Email delivery outcome ─────────────────────────────────────────────────
+
+    private Boolean emailSent;
+    private String emailError;
 }

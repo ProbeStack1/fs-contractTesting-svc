@@ -71,4 +71,15 @@ public class ApprovalDetailDTO {
      *   validationMode, validationSchema, requestBodySample, delayMs
      */
     private List<Map<String, Object>> endpoints;
+
+    // ── Contract test results ─────────────────────────────────────────────────
+
+    private Integer testTotal;
+    private Integer testPassed;
+    private Integer testFailed;
+
+    // ── Email delivery outcome ─────────────────────────────────────────────────
+
+    private Boolean emailSent;
+    private String emailError;
 }

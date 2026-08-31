@@ -31,4 +31,11 @@ public class ApprovalSendRequest {
 
     /** Optional context message included in the approval email. */
     private String notes;
+
+    /**
+     * Optional contract-test result summary from the UI, shaped
+     * { total, passed, failed }. Included in the approval email so the
+     * consumer/approver can see test outcomes without opening the app.
+     */
+    private java.util.Map<String, Object> testSummary;
 }

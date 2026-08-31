@@ -24,4 +24,7 @@ public class ApprovalSummaryDTO {
     private Instant sentAt;
     private String approverEmail;
     private String rejectionReason;
+
+    private Boolean emailSent;
+    private String emailError;
 }

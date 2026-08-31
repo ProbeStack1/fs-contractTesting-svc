@@ -30,12 +30,6 @@ public class MockApprovalService {
     private final MockServerApprovalHistoryRepository historyRepository;
     private final EmailService emailService;
 
-    @Value("${sendgrid.template.architect-approval}")
-    private String architectTemplateId;
-
-    @Value("${sendgrid.template.consumer-approval}")
-    private String consumerTemplateId;
-
     @Value("${approval.base-url}")
     private String approvalBaseUrl;
 
@@ -66,6 +60,9 @@ public class MockApprovalService {
         // Build the snapshot that goes into both the email and the history row.
         String maskedAuth = maskAuthValue(contract != null ? contract.getAuthValue() : null);
         List<Map<String, Object>> endpointSnapshots = buildEndpointSnapshots(activeEndpoints);
+        Integer testTotal = extractTestCount(req.getTestSummary(), "total");
+        Integer testPassed = extractTestCount(req.getTestSummary(), "passed");
+        Integer testFailed = extractTestCount(req.getTestSummary(), "failed");
 
         // ── Upsert parent approval row ────────────────────────────────────────
         String type = req.getType().toUpperCase();
@@ -110,12 +107,21 @@ public class MockApprovalService {
                 .quota(consumer != null ? consumer.getQuota() : null)
                 .apiKeyInfo(consumer != null ? consumer.getApiKeyInfo() : null)
                 .endpoints(endpointSnapshots)
+                .testTotal(testTotal)
+                .testPassed(testPassed)
+                .testFailed(testFailed)
                 .build();
 
-        history = historyRepository.save(history);
-
         // ── Send email ────────────────────────────────────────────────────────
-        sendApprovalEmail(history, approverEmail, type);
+        // Sent before the final save so the delivery outcome (success or the
+        // reason it failed, e.g. a missing/invalid SENDGRID_API_KEY secret or
+        // template id) is persisted on the same history row instead of being
+        // silently swallowed while the API still reports success.
+        EmailService.EmailDeliveryResult emailResult = sendApprovalEmail(history, approverEmail, type);
+        history.setEmailSent(emailResult.success());
+        history.setEmailError(emailResult.success() ? null : emailResult.errorMessage());
+
+        history = historyRepository.save(history);
 
         return toSummary(history);
     }
@@ -209,73 +215,265 @@ public class MockApprovalService {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private void sendApprovalEmail(MockServerApprovalHistory history, String toEmail, String type) {
-        Map<String, Object> data = buildEmailPayload(history);
-        String templateId = "ARCHITECT".equals(type) ? architectTemplateId : consumerTemplateId;
+    private EmailService.EmailDeliveryResult sendApprovalEmail(MockServerApprovalHistory history, String toEmail, String type) {
+        String subject = buildSubject(history);
+        String html = buildEmailHtml(history);
 
-        EmailService.EmailDeliveryResult result = emailService.sendDynamicEmail(toEmail, data, templateId);
+        EmailService.EmailDeliveryResult result = emailService.sendHtmlEmail(toEmail, subject, html);
         if (!result.success()) {
             log.warn("Approval email delivery failed for history {}: {}", history.getId(), result.errorMessage());
         }
+        return result;
     }
 
-    /**
-     * Builds the complete template-data map sent to SendGrid.
-     *
-     * Variables available in the template:
-     *   approverEmail, sentBy, type, notes,
-     *   mockServiceName, mockServerUrl, apiSpecName,
-     *   providerName, consumerName, baseUrl, environment,
-     *   specRaw, authType, authValue,
-     *   rateLimiting, apiTps, quota, apiKeyInfo,
-     *   endpointCount, endpoints (array),
-     *   reviewUrl, approveUrl, rejectUrl
-     */
-    private Map<String, Object> buildEmailPayload(MockServerApprovalHistory h) {
-        Map<String, Object> data = new LinkedHashMap<>();
+    /** Pulls an int out of the UI's { total, passed, failed } testSummary map, if present. */
+    private Integer extractTestCount(Map<String, Object> testSummary, String key) {
+        if (testSummary == null) return null;
+        Object value = testSummary.get(key);
+        if (value instanceof Number number) return number.intValue();
+        if (value instanceof String s && !s.isBlank()) {
+            try {
+                return Integer.parseInt(s.trim());
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }
+        return null;
+    }
 
-        // Identity
-        data.put("approverEmail", h.getApproverEmail());
-        data.put("sentBy", h.getSentBy());
-        data.put("type", h.getType());
-        data.put("notes", h.getNotes() != null ? h.getNotes() : "");
+    // ── Email HTML generation ────────────────────────────────────────────────
+    //
+    // Builds a fully self-contained HTML email in code — no SendGrid dashboard
+    // dynamic template required. Every field captured in the history snapshot
+    // (mock service, full OpenAPI spec, every endpoint's schema/samples, auth,
+    // rate limits, and test results) is rendered directly into the message.
 
-        // Mock server
-        data.put("mockServiceName", orEmpty(h.getMockServiceName()));
-        data.put("mockServerUrl", orEmpty(h.getMockServerUrl()));
-        data.put("apiSpecName", orEmpty(h.getApiSpecName()));
+    private String buildSubject(MockServerApprovalHistory h) {
+        String kind = "CONSUMER".equalsIgnoreCase(h.getType()) ? "Consumer" : "Architect";
+        String service = orEmpty(h.getMockServiceName());
+        return "Contract Testing: " + kind + " approval requested"
+                + (service.isBlank() ? "" : " — " + service);
+    }
 
-        // Contract / provider info
-        data.put("providerName", orEmpty(h.getProviderName()));
-        data.put("consumerName", orEmpty(h.getConsumerName()));
-        data.put("baseUrl", orEmpty(h.getBaseUrl()));
-        data.put("environment", orEmpty(h.getEnvironment()));
-
-        // OpenAPI spec — full text so approver can inspect all schemas, error models, paths
-        data.put("specRaw", h.getSpecRaw() != null ? h.getSpecRaw() : "No spec available");
-
-        // Auth model
-        data.put("authType", orEmpty(h.getAuthType()));
-        data.put("authValue", orEmpty(h.getAuthValue()));   // already masked
-
-        // Rate-limit policy
-        data.put("rateLimiting", orEmpty(h.getRateLimiting()));
-        data.put("apiTps", orEmpty(h.getApiTps()));
-        data.put("quota", orEmpty(h.getQuota()));
-        data.put("apiKeyInfo", orEmpty(h.getApiKeyInfo()));
-
-        // Endpoints (method, path, status, response, validation schema, sample body)
-        List<Map<String, Object>> eps = h.getEndpoints() != null ? h.getEndpoints() : Collections.emptyList();
-        data.put("endpoints", eps);
-        data.put("endpointCount", eps.size());
-
-        // Action links for email buttons
+    private String buildEmailHtml(MockServerApprovalHistory h) {
+        boolean isConsumer = "CONSUMER".equalsIgnoreCase(h.getType());
         String base = approvalBaseUrl + "/approvals/" + h.getId();
-        data.put("reviewUrl", base);
-        data.put("approveUrl", base + "/approve");
-        data.put("rejectUrl", base + "/reject");
 
-        return data;
+        StringBuilder html = new StringBuilder();
+        html.append("<!DOCTYPE html><html><body style=\"margin:0;padding:0;background:#f1f5f9;")
+            .append("font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;\">")
+            .append("<div style=\"max-width:680px;margin:0 auto;padding:24px 16px;\">");
+
+        // Header banner
+        html.append("<div style=\"background:#0f172a;border-radius:12px 12px 0 0;padding:24px;\">")
+            .append("<p style=\"margin:0;color:#94a3b8;font-size:12px;font-weight:700;")
+            .append("letter-spacing:.05em;text-transform:uppercase;\">Contract Testing</p>")
+            .append("<h1 style=\"margin:6px 0 0;color:#f8fafc;font-size:20px;\">")
+            .append(isConsumer ? "Consumer approval requested" : "Architect approval requested")
+            .append("</h1></div>");
+
+        html.append("<div style=\"background:#ffffff;border:1px solid #e2e8f0;border-top:none;")
+            .append("border-radius:0 0 12px 12px;padding:24px;\">");
+
+        html.append("<p style=\"margin:0 0 20px;color:#334155;font-size:14px;line-height:1.6;\">")
+            .append(escapeHtml(orEmpty(h.getSentBy())))
+            .append(" shared the mock service <strong>")
+            .append(escapeHtml(orEmpty(h.getMockServiceName())))
+            .append("</strong> for your review and approval.</p>");
+
+        if (h.getNotes() != null && !h.getNotes().isBlank()) {
+            html.append(noteBox(h.getNotes()));
+        }
+        if (h.getTestTotal() != null) {
+            html.append(testResultsSection(h));
+        }
+
+        html.append(metaSection(h));
+        html.append(endpointsSection(h));
+        html.append(specSection(h));
+        html.append(actionButtons(base, base + "/approve", base + "/reject"));
+
+        html.append("</div>")
+            .append("<p style=\"text-align:center;color:#94a3b8;font-size:11px;margin-top:16px;\">")
+            .append("Sent automatically by the Contract Testing platform.</p>")
+            .append("</div></body></html>");
+
+        return html.toString();
+    }
+
+    private String sectionTitle(String title) {
+        return "<h2 style=\"margin:24px 0 10px;font-size:12px;font-weight:700;color:#0f172a;"
+                + "text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid #e2e8f0;"
+                + "padding-bottom:6px;\">" + escapeHtml(title) + "</h2>";
+    }
+
+    private String noteBox(String notes) {
+        return "<div style=\"background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;"
+                + "padding:12px 14px;margin-bottom:20px;\">"
+                + "<p style=\"margin:0;color:#1e40af;font-size:13px;\"><strong>Note:</strong> "
+                + escapeHtml(notes) + "</p></div>";
+    }
+
+    private String testResultsSection(MockServerApprovalHistory h) {
+        int total = h.getTestTotal() != null ? h.getTestTotal() : 0;
+        int passed = h.getTestPassed() != null ? h.getTestPassed() : 0;
+        int failed = h.getTestFailed() != null ? h.getTestFailed() : 0;
+        String failedColor = failed > 0 ? "#dc2626" : "#94a3b8";
+
+        return sectionTitle("Contract Test Results")
+                + "<table role=\"presentation\" style=\"width:100%;border-collapse:separate;"
+                + "border-spacing:8px 0;margin:0 0 20px -8px;\"><tr>"
+                + statCell("Total", String.valueOf(total), "#334155")
+                + statCell("Passed", String.valueOf(passed), "#16a34a")
+                + statCell("Failed", String.valueOf(failed), failedColor)
+                + "</tr></table>";
+    }
+
+    private String statCell(String label, String value, String color) {
+        return "<td style=\"width:33%;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;"
+                + "padding:12px;text-align:center;\">"
+                + "<div style=\"font-size:20px;font-weight:700;color:" + color + ";\">" + value + "</div>"
+                + "<div style=\"font-size:11px;color:#64748b;font-weight:600;margin-top:2px;\">" + label + "</div>"
+                + "</td>";
+    }
+
+    private String metaSection(MockServerApprovalHistory h) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(sectionTitle("Service & Contract Details"));
+        sb.append("<table role=\"presentation\" style=\"width:100%;border-collapse:collapse;")
+          .append("font-size:13px;margin-bottom:20px;\">");
+        sb.append(metaRow("Mock service", h.getMockServiceName()));
+        sb.append(metaRow("Mock server URL", h.getMockServerUrl()));
+        sb.append(metaRow("API spec", h.getApiSpecName()));
+        sb.append(metaRow("Provider", h.getProviderName()));
+        sb.append(metaRow("Consumer", h.getConsumerName()));
+        sb.append(metaRow("Base URL", h.getBaseUrl()));
+        sb.append(metaRow("Environment", h.getEnvironment()));
+        sb.append(metaRow("Auth type", h.getAuthType()));
+        sb.append(metaRow("Auth value", h.getAuthValue()));
+        sb.append(metaRow("Rate limiting", h.getRateLimiting()));
+        sb.append(metaRow("API TPS", h.getApiTps()));
+        sb.append(metaRow("Quota", h.getQuota()));
+        sb.append(metaRow("API key info", h.getApiKeyInfo()));
+        sb.append("</table>");
+        return sb.toString();
+    }
+
+    private String metaRow(String label, String value) {
+        String v = (value == null || value.isBlank()) ? "—" : escapeHtml(value);
+        return "<tr>"
+                + "<td style=\"padding:6px 12px 6px 0;color:#64748b;font-weight:600;white-space:nowrap;"
+                + "vertical-align:top;width:160px;\">" + escapeHtml(label) + "</td>"
+                + "<td style=\"padding:6px 0;color:#0f172a;word-break:break-word;\">" + v + "</td>"
+                + "</tr>";
+    }
+
+    private String endpointsSection(MockServerApprovalHistory h) {
+        List<Map<String, Object>> eps = h.getEndpoints() != null ? h.getEndpoints() : Collections.emptyList();
+        StringBuilder sb = new StringBuilder();
+        sb.append(sectionTitle("Mock Endpoints (" + eps.size() + ")"));
+        if (eps.isEmpty()) {
+            sb.append("<p style=\"color:#94a3b8;font-size:13px;margin:0 0 20px;\">")
+              .append("No active endpoints on this mock server.</p>");
+            return sb.toString();
+        }
+        for (Map<String, Object> ep : eps) {
+            sb.append(endpointCard(ep));
+        }
+        return sb.toString();
+    }
+
+    private String endpointCard(Map<String, Object> ep) {
+        String method = str(ep.get("method"));
+        String path = str(ep.get("path"));
+        String status = str(ep.get("responseStatus"));
+        String validationMode = str(ep.get("validationMode"));
+        String delay = str(ep.get("delayMs"));
+        String requestSample = str(ep.get("requestBodySample"));
+        String responseBody = str(ep.get("responseBody"));
+        String validationSchema = str(ep.get("validationSchema"));
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("<div style=\"border:1px solid #e2e8f0;border-radius:8px;padding:12px 14px;")
+          .append("margin-bottom:10px;\">");
+        sb.append("<div style=\"margin-bottom:6px;\">")
+          .append("<span style=\"display:inline-block;background:").append(methodColor(method))
+          .append(";color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;")
+          .append("margin-right:8px;\">").append(escapeHtml(method)).append("</span>")
+          .append("<span style=\"font-family:monospace;font-size:13px;color:#0f172a;\">")
+          .append(escapeHtml(path)).append("</span></div>");
+        sb.append("<p style=\"margin:0 0 8px;font-size:12px;color:#64748b;\">Response status: <strong>")
+          .append(escapeHtml(status)).append("</strong>")
+          .append(validationMode.isBlank() ? "" : " · Validation: <strong>" + escapeHtml(validationMode) + "</strong>")
+          .append(delay.isBlank() ? "" : " · Delay: <strong>" + escapeHtml(delay) + "ms</strong>")
+          .append("</p>");
+
+        if (!requestSample.isBlank()) sb.append(codeBlock("Request sample", requestSample));
+        if (!responseBody.isBlank()) sb.append(codeBlock("Response body", responseBody));
+        if (!validationSchema.isBlank()) sb.append(codeBlock("Validation schema", validationSchema));
+
+        sb.append("</div>");
+        return sb.toString();
+    }
+
+    private String codeBlock(String label, String content) {
+        return "<p style=\"margin:8px 0 2px;font-size:11px;color:#64748b;font-weight:600;\">"
+                + escapeHtml(label) + "</p>"
+                + "<pre style=\"margin:0;background:#0f172a;color:#e2e8f0;padding:10px;border-radius:6px;"
+                + "font-size:11px;line-height:1.5;overflow-x:auto;white-space:pre-wrap;word-break:break-word;\">"
+                + escapeHtml(content) + "</pre>";
+    }
+
+    private String methodColor(String method) {
+        return switch (method == null ? "" : method.toUpperCase()) {
+            case "GET" -> "#2563eb";
+            case "POST" -> "#16a34a";
+            case "PUT" -> "#d97706";
+            case "PATCH" -> "#7c3aed";
+            case "DELETE" -> "#dc2626";
+            default -> "#475569";
+        };
+    }
+
+    private String specSection(MockServerApprovalHistory h) {
+        String spec = h.getSpecRaw();
+        if (spec == null || spec.isBlank()) {
+            return sectionTitle("Full API Specification")
+                    + "<p style=\"color:#94a3b8;font-size:13px;margin:0 0 20px;\">No spec available.</p>";
+        }
+        return sectionTitle("Full API Specification")
+                + "<pre style=\"margin:0 0 20px;background:#0f172a;color:#e2e8f0;padding:14px;"
+                + "border-radius:8px;font-size:11px;line-height:1.5;overflow-x:auto;white-space:pre-wrap;"
+                + "word-break:break-word;max-height:520px;overflow-y:auto;\">" + escapeHtml(spec) + "</pre>";
+    }
+
+    private String actionButtons(String reviewUrl, String approveUrl, String rejectUrl) {
+        return "<table role=\"presentation\" style=\"margin-top:24px;\"><tr>"
+                + actionButton(reviewUrl, "Review Details", "#1e293b")
+                + "<td style=\"width:10px;\"></td>"
+                + actionButton(approveUrl, "Approve", "#16a34a")
+                + "<td style=\"width:10px;\"></td>"
+                + actionButton(rejectUrl, "Reject", "#dc2626")
+                + "</tr></table>";
+    }
+
+    private String actionButton(String url, String label, String color) {
+        return "<td><a href=\"" + escapeHtml(url) + "\" style=\"display:inline-block;background:" + color
+                + ";color:#ffffff;font-size:13px;font-weight:600;text-decoration:none;padding:10px 18px;"
+                + "border-radius:8px;\">" + escapeHtml(label) + "</a></td>";
+    }
+
+    private String str(Object value) {
+        return value == null ? "" : String.valueOf(value);
+    }
+
+    private String escapeHtml(String s) {
+        if (s == null) return "";
+        return s.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("'", "&#39;");
     }
 
     private List<Map<String, Object>> buildEndpointSnapshots(List<MockEndpoint> endpoints) {
@@ -396,6 +594,8 @@ public class MockApprovalService {
                 .sentAt(h.getSentAt())
                 .approverEmail(h.getApproverEmail())
                 .rejectionReason(h.getRejectionReason())
+                .emailSent(h.getEmailSent())
+                .emailError(h.getEmailError())
                 .build();
     }
 
@@ -426,6 +626,11 @@ public class MockApprovalService {
                 .quota(h.getQuota())
                 .apiKeyInfo(h.getApiKeyInfo())
                 .endpoints(h.getEndpoints())
+                .testTotal(h.getTestTotal())
+                .testPassed(h.getTestPassed())
+                .testFailed(h.getTestFailed())
+                .emailSent(h.getEmailSent())
+                .emailError(h.getEmailError())
                 .build();
     }
 
