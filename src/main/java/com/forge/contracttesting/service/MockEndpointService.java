@@ -74,6 +74,8 @@ public class MockEndpointService {
                 .validationSchema(request.getValidationSchema())
                 .validateMethod(request.getValidateMethod() != null
                         ? request.getValidateMethod() : true)
+                .requiresAuth(request.getRequiresAuth())
+                .requiredAuthHeader(request.getRequiredAuthHeader())
                 .createdAt(Instant.now())
                 .updatedAt(Instant.now())
                 .build();
@@ -102,6 +104,8 @@ public class MockEndpointService {
         if (request.getValidationMode()    != null) { endpoint.setValidationMode(request.getValidationMode());           updated = true; }
         if (request.getValidationSchema()  != null) { endpoint.setValidationSchema(request.getValidationSchema());       updated = true; }
         if (request.getValidateMethod()    != null) { endpoint.setValidateMethod(request.getValidateMethod());           updated = true; }
+        if (request.getRequiresAuth()      != null) { endpoint.setRequiresAuth(request.getRequiresAuth());               updated = true; }
+        if (request.getRequiredAuthHeader() != null) { endpoint.setRequiredAuthHeader(request.getRequiredAuthHeader());  updated = true; }
 
         if (updated) {
             validateBodySample(endpoint.getRequestBodySample(),
@@ -200,6 +204,8 @@ public class MockEndpointService {
                 .validationMode(entity.getValidationMode())
                 .validationSchema(entity.getValidationSchema())
                 .validateMethod(entity.getValidateMethod())
+                .requiresAuth(entity.getRequiresAuth())
+                .requiredAuthHeader(entity.getRequiredAuthHeader())
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())
                 .build();

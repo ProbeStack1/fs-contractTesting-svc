@@ -18,4 +18,6 @@ public class CreateEndpointRequest {
     private String validationMode;      // NONE | EXACT_MATCH | JSON_SCHEMA
     private String validationSchema;
     private Boolean validateMethod;
+    private Boolean requiresAuth;
+    private String requiredAuthHeader;
 }

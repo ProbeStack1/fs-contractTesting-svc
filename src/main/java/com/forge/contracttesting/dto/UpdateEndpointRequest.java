@@ -19,4 +19,6 @@ public class UpdateEndpointRequest {
     private String validationMode;
     private String validationSchema;
     private Boolean validateMethod;
+    private Boolean requiresAuth;
+    private String requiredAuthHeader;
 }

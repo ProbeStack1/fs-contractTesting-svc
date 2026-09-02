@@ -26,6 +26,8 @@ public class EndpointResponse {
     private String validationMode;
     private String validationSchema;
     private Boolean validateMethod;
+    private Boolean requiresAuth;
+    private String requiredAuthHeader;
     private Instant createdAt;
     private Instant updatedAt;
 }

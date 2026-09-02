@@ -117,6 +117,17 @@ public class MockRuntimeService {
                                 "Expected method: " + endpoint.getMethod()));
             }
 
+            if (Boolean.TRUE.equals(endpoint.getRequiresAuth())) {
+                String headerName = endpoint.getRequiredAuthHeader() != null && !endpoint.getRequiredAuthHeader().isBlank()
+                        ? endpoint.getRequiredAuthHeader() : "Authorization";
+                String headerValue = request.getHeader(headerName);
+                if (headerValue == null || headerValue.isBlank()) {
+                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .body(createErrorJson("Unauthorized", "Missing required header: " + headerName));
+                }
+            }
+
             if ("POST".equalsIgnoreCase(method) || "PUT".equalsIgnoreCase(method)
                     || "PATCH".equalsIgnoreCase(method)) {
                 ValidationResult vr = validateRequestBody(requestBody, endpoint);

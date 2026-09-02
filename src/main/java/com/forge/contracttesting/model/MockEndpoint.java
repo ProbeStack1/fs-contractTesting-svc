@@ -38,6 +38,13 @@ public class MockEndpoint {
     private String validationSchema;    // JSON Schema string (for JSON_SCHEMA mode)
     private Boolean validateMethod;     // enforce method matching
 
+    // Auth enforcement — opt-in (null/false preserves every existing
+    // endpoint's current unauthenticated behavior). When true, a request
+    // missing requiredAuthHeader (default "Authorization") is rejected with
+    // 401 before validation/response logic runs - see MockRuntimeService.
+    private Boolean requiresAuth;
+    private String requiredAuthHeader;
+
     private Instant createdAt;
     private Instant updatedAt;
 }
